@@ -59,3 +59,4 @@ pub fn is_valid_king_move(starting_x: i32, starting_y: i32, ending_x: i32, endin
     }
     false
 }
+
