@@ -13,10 +13,10 @@ impl ChessGame {
         let mut board = vec![vec![0;8];8];
 
         //pieces
-        board[0] = vec![1,2,3,4,5,3,2,1];
-        board[1] = vec![6,6,6,6,6,6,6,6];
-        board[6] = vec![6,6,6,6,6,6,6,6];
-        board[7] = vec![1,2,3,4,5,3,2,1];
+        board[0]=vec![7, 8, 9, 10, 11, 9, 8, 7];
+        board[1]=vec![12, 12, 12, 12, 12, 12, 12, 12];
+        board[6]=vec![1, 1, 1, 1, 1, 1, 1, 1];
+        board[7]=vec![6, 7, 8, 9, 10, 8, 7, 6];
 
         ChessGame {
             board
@@ -69,5 +69,54 @@ impl ChessGame {
 
         is_valid
      }
+
+     pub fn is_check(&self, color:i32) -> bool {
+        let mut king_x = 0;
+        let mut king_y = 0;
+        let mut found_king = false;
+
+        for x in 0..8 {
+            for y in 0..8 {
+                let piece = self.board[x][y];
+                if piece == 6 && color == 1 {
+                    king_x = x;
+                    king_y = y;
+                    found_king = true;
+                    break;
+                }
+                if piece == 12 && color == 2 {
+                    king_x = x;
+                    king_y = y;
+                    found_king = true;
+                    break;
+                }
+            }
+            if found_king {
+                break;
+            }
+        }
+
+        for x in 0..8 {
+            for y in 0..8 {
+                let piece = self.board[x][y];
+                if piece == 0 {
+                    continue;
+                }
+                if color == 1 && piece > 6 && piece < 13 {
+                    continue;
+                }
+                if color == 2 && piece > 0 && piece < 7 {
+                    continue;
+                }
+
+                if self.is_valid_move(x as i32, y as i32, king_x as i32, king_y as i32) {
+                    return true;
+                }
+            }
+        }
+        false
+     }
+
+     
 
 }
