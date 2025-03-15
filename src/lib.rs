@@ -1,11 +1,14 @@
 mod utils;
 
 use wasm_bindgen::prelude::*;
+use serde::{Serialize, Deserialize};
+
 
 #[wasm_bindgen]
 struct ChessGame {
     board: Vec<Vec<i32>>,
 }
+
 
 #[wasm_bindgen]
 impl ChessGame {
@@ -23,12 +26,43 @@ impl ChessGame {
         }
     }
 
-    pub fn get_board(&self) -> Vec<Vec<i32>> {
-        self.board.clone()
-
+    // Return a serialized JSON string
+    pub fn get_board_json(&self) -> String {
+        
+        match serde_json::to_string(&self.board) {
+            Ok(json) => json,
+            Err(_) => String::from("[]")
+        }
+    }
+    
+    // Return a flattened 1D array which JS can handle
+    pub fn get_board(&self) -> Vec<i32> {
+        self.board.iter().flat_map(|row| row.iter().cloned()).collect()
+    }
+    
+    //  Return board dimensions separately
+    pub fn get_board_width(&self) -> usize {
+        if self.board.is_empty() { 0 } else { self.board[0].len() }
+    }
+    
+    pub fn get_board_height(&self) -> usize {
+        self.board.len()
+    }
+    
+    // Get a specific piece
+    pub fn get_piece(&self, x: i32, y: i32) -> i32 {
+        if x < 0 || y < 0 || x >= 8 || y >= 8 {
+            return 0;
+        }
+        self.board[x as usize][y as usize]
     }
 
-    pub fn move_piece(&mut self, starting_x: i32, starting_y:i32, ending_x:i32, ending_y:i32) -> bool {
+    pub fn move_piece(&mut self, starting_x: i32, starting_y: i32, ending_x: i32, ending_y: i32) -> bool {
+        if starting_x < 0 || starting_y < 0 || ending_x < 0 || ending_y < 0 || 
+           starting_x >= 8 || starting_y >= 8 || ending_x >= 8 || ending_y >= 8 {
+            return false;
+        }
+        
         let piece = self.board[starting_x as usize][starting_y as usize];
         if piece == 0 {
             false
@@ -40,11 +74,11 @@ impl ChessGame {
         } 
     }
 
-    pub fn get_piece(&self, x: i32, y: i32) -> i32 {
-        self.board[x as usize][y as usize]
-    }
-
-     pub fn is_valid_move(&self, starting_x: i32, starting_y: i32, ending_x: i32, ending_y: i32) -> bool { 
+    pub fn is_valid_move(&self, starting_x: i32, starting_y: i32, ending_x: i32, ending_y: i32) -> bool { 
+        if starting_x < 0 || starting_y < 0 || ending_x < 0 || ending_y < 0 || 
+           starting_x >= 8 || starting_y >= 8 || ending_x >= 8 || ending_y >= 8 {
+            return false;
+        }
 
         let piece = self.board[starting_x as usize][starting_y as usize];
         if piece == 0 {
@@ -68,9 +102,9 @@ impl ChessGame {
         };
 
         is_valid
-     }
+    }
 
-     pub fn is_check(&self, color:i32) -> bool {
+    pub fn is_check(&self, color: i32) -> bool {
         let mut king_x = 0;
         let mut king_y = 0;
         let mut found_king = false;
@@ -115,8 +149,5 @@ impl ChessGame {
             }
         }
         false
-     }
-
-     
-
+    }
 }
