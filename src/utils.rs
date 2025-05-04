@@ -1,10 +1,4 @@
 pub fn set_panic_hook() {
-    // When the `console_error_panic_hook` feature is enabled, we can call the
-    // `set_panic_hook` function at least once during initialization, and then
-    // we will get better error messages if our code ever panics.
-    //
-    // For more details see
-    // https://github.com/rustwasm/console_error_panic_hook#readme
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 }
@@ -29,9 +23,6 @@ pub fn log(message: &str) {
     println!("{}",message);
 }
 
-/// TODO: This currently only checks moves to empty squares (no captures).
-/// TODO: Does not check for obstructions on initial double move.
-/// TODO: `is_white` parameter is crucial and must be determined by the caller.
 pub fn is_valid_pawn_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32, is_white: bool) -> bool {
     let dx = end_x - start_x;
     let dy = end_y - start_y;
@@ -68,7 +59,7 @@ pub fn is_valid_pawn_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32, is
         // }
     }
 
-    // Add en passant logic here if needed in the future
+    // TODO: Add en passant logic here
 
     false
 }
@@ -92,8 +83,6 @@ pub fn is_valid_knight_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) 
     (dx_abs == 2 && dy_abs == 1) || (dx_abs == 1 && dy_abs == 2)
 }
 
-/// Checks if a bishop move is valid according to its basic movement rules (diagonal).
-/// NOTE: Does not check for obstructions along the path.
 pub fn is_valid_bishop_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> bool {
     let dx_abs = (end_x - start_x).abs();
     let dy_abs = (end_y - start_y).abs();
@@ -103,7 +92,6 @@ pub fn is_valid_bishop_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) 
 }
 
 /// Checks if a queen move is valid according to its basic movement rules (rook or bishop).
-/// NOTE: Does not check for obstructions along the path.
 pub fn is_valid_queen_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> bool {
     // A queen moves like a rook or a bishop
     is_valid_rook_move(start_x, start_y, end_x, end_y) ||
@@ -122,9 +110,6 @@ pub fn is_valid_king_move(start_x: i32, start_y: i32, end_x: i32, end_y: i32) ->
 }
 
 
-// Helper function to check if path is clear (example for Rook horizontal move)
-// TODO: Need similar functions for vertical and diagonal paths.
-// This function is NOT currently used by lib.rs but would be needed for full validation.
 pub fn is_path_clear_horizontal(board: &Vec<Vec<i32>>, start_x: i32, start_y: i32, end_y: i32) -> bool {
     let y_step = if end_y > start_y { 1 } else { -1 };
     let mut current_y = start_y + y_step;
