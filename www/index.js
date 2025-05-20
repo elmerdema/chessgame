@@ -1,7 +1,6 @@
 import * as wasm from "hello-wasm-pack";
 import { ChessGame } from "chessgame";
 
-
 let chessgame = null;
 
 const chessboardElement = document.getElementById("chessboard");
@@ -9,6 +8,9 @@ const chessboardWidth = 400;
 const chessboardHeight = 400;
 const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
+
+const WHITE = 1;
+const BLACK = 2;
 
 const pieceSymbols = {
   1: "♙",
@@ -25,6 +27,9 @@ const pieceSymbols = {
   12: "♚",
 };
 
+let selectedPiece = null;
+let possibleMoves = [];
+
 function initChess() {
   try {
     chessgame = new ChessGame();
@@ -37,6 +42,16 @@ function initChess() {
 
 function getPieceSymbol(pieceValue) {
   return pieceSymbols[pieceValue] || "";
+}
+
+function getPieceColor(pieceValue) {
+    if (pieceValue >= 1 && pieceValue <= 6) {
+        return WHITE;
+    }
+    if (pieceValue >= 7 && pieceValue <= 12) {
+        return BLACK;
+    }
+    return 0;
 }
 
 function drawChessboard() {
@@ -70,7 +85,27 @@ function drawChessboard() {
       const index = row * boardWidth + col;
       const pieceValue = boardData[index];
 
-      square.style.backgroundColor = colors[(row + col) % 2];
+      let bgColor = colors[(row + col) % 2];
+      let borderColor = "none";
+      let cursorStyle = "default";
+
+
+      if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
+          borderColor = "3px solid blue";
+      }
+
+      const isPossibleMove = possibleMoves.some(move => move.row === row && move.col === col);
+      if (isPossibleMove) {
+          bgColor = "rgba(0, 255, 0, 0.5)";
+          borderColor = "2px solid green";
+          cursorStyle = "pointer";
+      }
+
+
+      square.style.backgroundColor = bgColor;
+      square.style.border = borderColor;
+      square.style.boxSizing = "border-box";
+      square.style.cursor = cursorStyle;
 
       if (pieceValue !== 0) {
         const pieceElement = document.createElement("span");
@@ -81,61 +116,95 @@ function drawChessboard() {
         pieceElement.style.alignItems = "center";
         pieceElement.style.width = "100%";
         pieceElement.style.height = "100%";
-
-        if (pieceValue >= 1 && pieceValue <= 6) {
-          pieceElement.style.color = "black";
-        } else if (pieceValue >= 7 && pieceValue <= 12) {
-          pieceElement.style.color = "white";
-        }
+        pieceElement.style.color = getPieceColor(pieceValue) === WHITE ? "black" : "white";
+        pieceElement.style.pointerEvents = 'none';
 
         square.appendChild(pieceElement);
       }
 
       square.dataset.row = row;
       square.dataset.col = col;
-      square.style.boxSizing = "border-box";
       square.addEventListener("click", onSquareClick);
+
       chessboardElement.appendChild(square);
     }
   }
 }
 
+
 function onSquareClick(event) {
-  const square = event.target;
-  const row = parseInt(square.dataset.row);
-  const col = parseInt(square.dataset.col);
-  const pieceValue = chessgame.get_piece(row, col);
+    const square = event.currentTarget;
+    const row = parseInt(square.dataset.row);
+    const col = parseInt(square.dataset.col);
 
-  if (pieceValue !== 0) {
-    const pieceElement = document.createElement("span");
-    pieceElement.textContent = getPieceSymbol(pieceValue);
-    pieceElement.style.fontSize = `${squareSize * 0.7}px`;
-    pieceElement.style.display = "flex";
-    pieceElement.style.justifyContent = "center";
-    pieceElement.style.alignItems = "center";
-    pieceElement.style.width = "100%";
-    pieceElement.style.height = "100%";
-    pieceElement.style.color = pieceValue >= 1 && pieceValue <= 6 ? "black" : "white";
-    square.appendChild(pieceElement);
+    console.log(`Clicked square: ${row}, ${col}`);
 
-    const moves = chessgame.get_moves(row, col);
-    console.log("Possible moves:", moves);
-    moves.array.forEach(move => {
-      const moveRow = move.row;
-      const moveCol = move.col;
-      const moveSquare = chessboardElement.querySelector(`[data-row="${moveRow}"][data-col="${moveCol}"]`);
-      moveSquare.style.backgroundColor = "yellow";
-      moveSquare.style.border = "2px solid red";
-      moveSquare.style.boxSizing = "border-box";
-      moveSquare.style.transition = "background-color 0.3s, border 0.3s";
-      moveSquare.style.cursor = "pointer";
-      moveSquare.addEventListener("click", () => {
-        chessgame.make_move(row, col, moveRow, moveCol);
-        drawChessboard();
-      });
-      
-    });
-  }
+    if (selectedPiece) {
+        const startRow = selectedPiece.row;
+        const startCol = selectedPiece.col;
+
+        const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
+
+        if (isPossibleDestination) {
+            try {
+                chessgame.make_move(startRow, startCol, row, col);
+                console.log(`Move successful: ${startRow},${startCol} to ${row},${col}`);
+                selectedPiece = null;
+                possibleMoves = [];
+                drawChessboard();
+
+            } catch (error) {
+                console.error("Move failed:", error);
+                selectedPiece = null;
+                possibleMoves = [];
+                drawChessboard();
+            }
+
+        } else {
+            selectedPiece = null;
+            possibleMoves = [];
+            drawChessboard();
+
+            const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
+            const currentTurn = chessgame.get_current_turn();
+            const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
+
+            if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+                handlePieceSelection(row, col);
+            } else {
+                 console.log("Clicked outside valid moves, deselected.");
+            }
+        }
+
+    } else {
+        const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
+        const currentTurn = chessgame.get_current_turn();
+        const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
+
+        if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+            handlePieceSelection(row, col);
+        } else {
+            console.log("Cannot select: Empty square or not your piece.");
+        }
+    }
+}
+
+function handlePieceSelection(row, col) {
+    selectedPiece = { row, col };
+
+    const movesArray = chessgame.get_moves(row, col);
+
+    possibleMoves = [];
+    if (Array.isArray(movesArray) && movesArray.length % 2 === 0) {
+        for (let i = 0; i < movesArray.length; i += 2) {
+            possibleMoves.push({ row: movesArray[i], col: movesArray[i+1] });
+        }
+    }
+
+    console.log(`Selected piece at ${row},${col}. Found ${possibleMoves.length} possible moves.`);
+    console.log("Possible moves:", possibleMoves);
+
+    drawChessboard();
 }
 
 initChess();

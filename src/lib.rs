@@ -575,7 +575,7 @@ impl ChessGame {
             return moves;
         }
 
-        
+
         for i in 0..8{
             for j in 0..8{
                 if self.is_valid_move(x as i32, y as i32, i as i32, j as i32) {
@@ -586,6 +586,14 @@ impl ChessGame {
         }
         moves
     }
+
+    pub fn get_current_turn(&self) -> i32 {
+        self.current_turn
+    }
+    pub fn change_turn(&mut self) {
+        self.current_turn = if self.current_turn == WHITE { BLACK } else { WHITE };
+    }
+
 
 
 }
