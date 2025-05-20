@@ -1,7 +1,6 @@
 mod utils;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
-use std::convert::TryInto;
 
 //wasm-pack build
 //cd www
@@ -449,7 +448,7 @@ impl ChessGame {
 
     #[wasm_bindgen]
     pub fn make_move(&mut self, start_x: usize, start_y: usize, end_x: usize, end_y: usize) -> Result<(), JsValue> {
-        // Use i32 for internal validation logic consistency
+
         let (sx, sy, ex, ey) = (start_x as i32, start_y as i32, end_x as i32, end_y as i32);
 
         if !self.is_valid_move(sx, sy, ex, ey) {
@@ -560,5 +559,33 @@ impl ChessGame {
 
         Ok(())
     }
+
+    pub fn get_moves(&self, x:usize, y:usize) -> Vec<usize> {
+        let mut moves= Vec::new();
+
+        if (x > 7 || y > 7) {
+            return moves;
+        }
+
+        let piece= self.get_piece(x, y);
+        if piece == 0 {
+            return moves;
+        }
+        if utils::get_piece_color(piece) != self.current_turn {
+            return moves;
+        }
+
+        
+        for i in 0..8{
+            for j in 0..8{
+                if self.is_valid_move(x as i32, y as i32, i as i32, j as i32) {
+                    moves.push(i);
+                    moves.push(j);
+                }
+            }
+        }
+        moves
+    }
+
 
 }

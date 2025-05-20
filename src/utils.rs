@@ -1,8 +1,3 @@
-pub fn set_panic_hook() {
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
-}
-
 pub fn get_piece_type(piece: i32) ->i32 {
     match piece {
         1..=6 => piece,

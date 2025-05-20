@@ -94,9 +94,47 @@ function drawChessboard() {
       square.dataset.row = row;
       square.dataset.col = col;
       square.style.boxSizing = "border-box";
-
+      square.addEventListener("click", onSquareClick);
       chessboardElement.appendChild(square);
     }
+  }
+}
+
+function onSquareClick(event) {
+  const square = event.target;
+  const row = parseInt(square.dataset.row);
+  const col = parseInt(square.dataset.col);
+  const pieceValue = chessgame.get_piece(row, col);
+
+  if (pieceValue !== 0) {
+    const pieceElement = document.createElement("span");
+    pieceElement.textContent = getPieceSymbol(pieceValue);
+    pieceElement.style.fontSize = `${squareSize * 0.7}px`;
+    pieceElement.style.display = "flex";
+    pieceElement.style.justifyContent = "center";
+    pieceElement.style.alignItems = "center";
+    pieceElement.style.width = "100%";
+    pieceElement.style.height = "100%";
+    pieceElement.style.color = pieceValue >= 1 && pieceValue <= 6 ? "black" : "white";
+    square.appendChild(pieceElement);
+
+    const moves = chessgame.get_moves(row, col);
+    console.log("Possible moves:", moves);
+    moves.array.forEach(move => {
+      const moveRow = move.row;
+      const moveCol = move.col;
+      const moveSquare = chessboardElement.querySelector(`[data-row="${moveRow}"][data-col="${moveCol}"]`);
+      moveSquare.style.backgroundColor = "yellow";
+      moveSquare.style.border = "2px solid red";
+      moveSquare.style.boxSizing = "border-box";
+      moveSquare.style.transition = "background-color 0.3s, border 0.3s";
+      moveSquare.style.cursor = "pointer";
+      moveSquare.addEventListener("click", () => {
+        chessgame.make_move(row, col, moveRow, moveCol);
+        drawChessboard();
+      });
+      
+    });
   }
 }
 
