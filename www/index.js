@@ -129,6 +129,7 @@ function drawChessboard() {
       chessboardElement.appendChild(square);
     }
   }
+  warnKingCheck(); // Check if the king is in check after selecting a piece
 }
 
 
@@ -198,7 +199,6 @@ function handlePieceSelection(row, col) {
   selectedPiece = { row, col };
 
   const movesArray = chessgame.get_moves(row, col);
-  console.log(`Raw movesArray from WASM for piece at (${row}, ${col}):`, movesArray);
 
   possibleMoves = [];
   // Check if movesArray is array-like (Array, Uint8Array, etc.) and has an even number of elements
@@ -219,6 +219,21 @@ function handlePieceSelection(row, col) {
   console.log(`Selected piece at ${row},${col}. Found ${possibleMoves.length} possible moves.`);
 
   drawChessboard();
+}
+
+function warnKingCheck() {
+  const isInCheck = chessgame.check();
+  const currentTurn = chessgame.get_current_turn();
+  if (isInCheck) {
+    const color = currentTurn === WHITE ? WHITE : BLACK;
+    const kingPosition = chessgame.get_king_position(color); // this returns [row, col] for the king's position
+    const kingSquare = document.querySelector(`[data-row="${kingPosition[0]}"][data-col="${kingPosition[1]}"]`);
+    if (kingSquare) {
+      kingSquare.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Highlight the king in check
+    }
+
+  }
+
 }
 
 initChess();

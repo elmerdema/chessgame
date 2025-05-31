@@ -1,26 +1,13 @@
 mod utils;
+mod constants;
+
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
-
-//wasm-pack build
-//cd www
-// npm run start
-
-const W_PAWN: i32 = 1;
-const W_ROOK: i32 = 2;
-const W_KNIGHT: i32 = 3;
-const W_BISHOP: i32 = 4;
-const W_QUEEN: i32 = 5;
-const W_KING: i32 = 6;
-const B_PAWN: i32 = 7;
-const B_ROOK: i32 = 8;
-const B_KNIGHT: i32 = 9;
-const B_BISHOP: i32 = 10;
-const B_QUEEN: i32 = 11;
-const B_KING: i32 = 12;
-
-const WHITE: i32 = 1;
-const BLACK: i32 = 2;
+use constants::{
+    W_PAWN, W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING,
+    B_PAWN, B_ROOK, B_KNIGHT, B_BISHOP, B_QUEEN, B_KING,
+    WHITE, BLACK
+};
 
 #[wasm_bindgen]
 #[derive(Debug, Clone)]
@@ -618,11 +605,52 @@ impl ChessGame {
         moves
     }
 
+    
+    #[wasm_bindgen]
+    pub fn get_king_position(&self) -> Vec<i32> {
+        let king_piece = if self.current_turn == WHITE { W_KING } else { B_KING };
+
+        for r in 0..8 {
+            for c in 0..8 {
+                if self.board[r][c] == king_piece {
+                    return vec![r as i32, c as i32];
+                }
+            }
+        }
+        // Should not happen in a valid game, but return an empty vector if king not found
+        Vec::new() 
+    }
+
+    pub fn checkmate(&self) -> bool {
+        for i in 0..8 {
+            for j in 0..8 {
+                let temp_piece : i32 = self.get_piece(i, j);
+                if temp_piece != 0 && utils::get_piece_color(temp_piece) == self.current_turn {
+                    // If any piece can make a valid move, it's not checkmate
+                    if self.get_moves(i, j).len() > 0 {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
+    }
     pub fn get_current_turn(&self) -> i32 {
         self.current_turn
     }
     pub fn change_turn(&mut self) {
         self.current_turn = if self.current_turn == WHITE { BLACK } else { WHITE };
     }
+    pub fn check(&self) -> bool {
+        self.is_check(self.current_turn)
+    }
 
+    pub fn can_castle_kingside(&self) -> bool {
+        if self.current_turn == WHITE {
+            self.white_can_castle_kingside
+        }
+        else {
+            self.black_can_castle_kingside
+        }
+    }
 }
