@@ -133,78 +133,92 @@ function drawChessboard() {
 
 
 function onSquareClick(event) {
-    const square = event.currentTarget;
-    const row = parseInt(square.dataset.row);
-    const col = parseInt(square.dataset.col);
+  const square = event.currentTarget;
+  const row = parseInt(square.dataset.row);
+  const col = parseInt(square.dataset.col);
 
-    console.log(`Clicked square: ${row}, ${col}`);
+  console.log(`Clicked square: ${row}, ${col}`);
 
-    if (selectedPiece) {
-        const startRow = selectedPiece.row;
-        const startCol = selectedPiece.col;
+  if (selectedPiece) {
+      const startRow = selectedPiece.row;
+      const startCol = selectedPiece.col;
 
-        const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
+      const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
 
-        if (isPossibleDestination) {
-            try {
-                chessgame.make_move(startRow, startCol, row, col);
-                console.log(`Move successful: ${startRow},${startCol} to ${row},${col}`);
-                selectedPiece = null;
-                possibleMoves = [];
-                drawChessboard();
+      if (isPossibleDestination) {
+          try {
+              chessgame.make_move(startRow, startCol, row, col);
+              console.log(`Move successful: ${startRow},${startCol} to ${row},${col}`);
+              selectedPiece = null;
+              possibleMoves = [];
+              drawChessboard();
 
-            } catch (error) {
-                console.error("Move failed:", error);
-                selectedPiece = null;
-                possibleMoves = [];
-                drawChessboard();
-            }
+          } catch (error) {
+              console.error("Move failed:", error);
+              selectedPiece = null;
+              possibleMoves = [];
+              drawChessboard();
+          }
 
-        } else {
-            selectedPiece = null;
-            possibleMoves = [];
-            drawChessboard();
+      } else {
+          // Clicked on a square that is not a valid move for the selected piece.
+          // This could be another piece of the same color, an opponent's piece (not a capture), or an empty square.
+          console.log("Clicked outside valid moves for the selected piece. Deselecting current and checking new square.");
+          selectedPiece = null; // Deselect current piece
+          possibleMoves = [];   // Clear its moves
 
-            const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
-            const currentTurn = chessgame.get_current_turn();
-            const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
+          const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
+          const currentTurn = chessgame.get_current_turn();
+          const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
 
-            if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
-                handlePieceSelection(row, col);
-            } else {
-                 console.log("Clicked outside valid moves, deselected.");
-            }
-        }
+          console.log(`Checking new square for selection: (${row},${col}), Value: ${pieceValueAtClickedSquare}, Color: ${pieceColorAtClickedSquare}, Current Turn: ${currentTurn}`);
 
-    } else {
-        const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
-        const currentTurn = chessgame.get_current_turn();
-        const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
+          if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+              handlePieceSelection(row, col); // Select the new piece
+          } else {
+               console.log("New square is empty or not your piece. Board redrawn, nothing selected.");
+               drawChessboard();
+          }
+      }
 
-        if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
-            handlePieceSelection(row, col);
-        } else {
+  } else { // No piece is currently selected
+      const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
+      const currentTurn = chessgame.get_current_turn();
+      const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
+
+      if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+          handlePieceSelection(row, col);
+      } else {
             console.log("Cannot select: Empty square or not your piece.");
         }
     }
 }
 
 function handlePieceSelection(row, col) {
-    selectedPiece = { row, col };
+  selectedPiece = { row, col };
 
-    const movesArray = chessgame.get_moves(row, col);
+  const movesArray = chessgame.get_moves(row, col);
+  console.log(`Raw movesArray from WASM for piece at (${row}, ${col}):`, movesArray);
 
-    possibleMoves = [];
-    if (Array.isArray(movesArray) && movesArray.length % 2 === 0) {
-        for (let i = 0; i < movesArray.length; i += 2) {
-            possibleMoves.push({ row: movesArray[i], col: movesArray[i+1] });
-        }
-    }
+  possibleMoves = [];
+  // Check if movesArray is array-like (Array, Uint8Array, etc.) and has an even number of elements
+  if (movesArray && typeof movesArray.length === 'number' && movesArray.length % 2 === 0) {
+      for (let i = 0; i < movesArray.length; i += 2) {
+          possibleMoves.push({ row: movesArray[i], col: movesArray[i + 1] });
+      }
+  } else {
+      if (movesArray === null || movesArray === undefined) {
+          console.warn(`get_moves for (${row},${col}) returned null or undefined.`);
+      } else if (typeof movesArray.length !== 'number' || movesArray.length % 2 !== 0) {
+          console.warn(`get_moves for (${row},${col}) returned an array-like object with invalid length: ${movesArray.length}. Content:`, movesArray);
+      } else {
+          console.warn(`get_moves for (${row},${col}) did not return a valid flat array or array-like structure. Received:`, movesArray);
+      }
+  }
 
-    console.log(`Selected piece at ${row},${col}. Found ${possibleMoves.length} possible moves.`);
-    console.log("Possible moves:", possibleMoves);
+  console.log(`Selected piece at ${row},${col}. Found ${possibleMoves.length} possible moves.`);
 
-    drawChessboard();
+  drawChessboard();
 }
 
 initChess();

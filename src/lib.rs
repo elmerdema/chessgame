@@ -40,10 +40,8 @@ impl ChessGame {
     #[wasm_bindgen(constructor)]
     pub fn new() -> ChessGame {
         let mut board = vec![vec![0; 8]; 8];
-
-
         // Black pieces (Rank 8 -> board index 0)
-        board[0] = vec![B_ROOK,B_KNIGHT, B_BISHOP, B_QUEEN, B_KING, B_BISHOP, B_BISHOP, B_ROOK];
+        board[0] = vec![B_ROOK,B_KNIGHT, B_BISHOP, B_QUEEN, B_KING, B_BISHOP, B_KNIGHT, B_ROOK];
         // Black Pawns (Rank 7 -> board index 1)
         board[1] = vec![B_PAWN; 8];    // B_Pawn * 8
         board[6] = vec![ W_PAWN; 8];    // W_Pawn * 8
@@ -109,6 +107,34 @@ impl ChessGame {
     }
 
     pub fn is_valid_move(&self, start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> bool {
+        utils::log(&format!("Checking move from ({},{}) to ({},{})", start_x, start_y, end_x, end_y));
+        
+        // 1. Basic Bounds & Same Square
+        if !Self::is_on_board(start_x, start_y) || !Self::is_on_board(end_x, end_y) { 
+            utils::log("Move failed: out of bounds");
+            return false; 
+        }
+        if start_x == end_x && start_y == end_y { 
+            utils::log("Move failed: same square");
+            return false; 
+        }
+
+        // 2. Get Piece Info & Check Turn
+        let piece = self.get_piece(start_x as usize, start_y as usize);
+        if piece == 0 { 
+            utils::log("Move failed: no piece at start");
+            return false; 
+        }
+        
+        let piece_color = utils::get_piece_color(piece);
+        if piece_color != self.current_turn { 
+            utils::log(&format!("Move failed: wrong turn. Piece color: {}, Current turn: {}", piece_color, self.current_turn));
+            return false; 
+        }
+
+        let piece_type = utils::get_piece_type(piece);
+        utils::log(&format!("Moving piece type: {}, color: {}", piece_type, piece_color));
+
         // 1. Basic Bounds & Same Square
         if !Self::is_on_board(start_x, start_y) || !Self::is_on_board(end_x, end_y) { return false; }
         if start_x == end_x && start_y == end_y { return false; }
@@ -147,7 +173,6 @@ impl ChessGame {
             6 => self.is_valid_king_move_detailed(start_x, start_y, end_x, end_y, piece_color),
             _ => false // Unknown piece type just in case?
         };
-
         // If the basic shape/rules aren't valid, the move is impossible.
         if !is_basic_move_valid {
             return false;
@@ -196,48 +221,67 @@ impl ChessGame {
     }
 
     // Extracted detailed pawn move logic for clarity
+
     fn is_valid_pawn_move_detailed(&self, start_x: i32, start_y: i32, end_x: i32, end_y: i32, piece_color: i32, ending_piece: i32, ending_piece_color: i32) -> bool {
         let is_white = piece_color == WHITE;
-        let dx = end_x - start_x; //delta x and y
-        let dy = end_y - start_y; 
+        let dx = end_x - start_x;
+        let dy = end_y - start_y;
 
         // Standard Forward Moves
         if dy == 0 {
-            if ending_piece != 0 { return false; } // Cannot move forward onto a piece
+            if ending_piece != 0 { 
+                utils::log("Pawn cannot move forward onto a piece");
+                return false; 
+            }
+            
             let expected_dx = if is_white { -1 } else { 1 };
-            let expected_dx_double = if is_white { -2 } else { 2 };
-            let start_rank = if is_white { 6 } else { 1 }; // Rank 2 for white, Rank 7 for black
+            let start_rank = if is_white { 6 } else { 1 };
+
+            utils::log(&format!("Expected dx: {}, start_rank: {}, actual start_x: {}", expected_dx, start_rank, start_x));
 
             // Single step forward
-            if dx == expected_dx { return true; }
+            if dx == expected_dx { 
+                utils::log("Valid single pawn move");
+                return true; 
+            }
 
             // Double step forward (only from starting rank)
-            if dx == expected_dx_double && start_x == start_rank {
-                // Check obstruction
+            if dx == expected_dx * 2 && start_x == start_rank {
+                // Check if path is clear
                 let middle_x = start_x + expected_dx;
                 if self.get_piece(middle_x as usize, start_y as usize) != 0 {
-                    return false; // Path is cockblocked
+                    utils::log("Pawn double move blocked");
+                    return false;
                 }
-                return true; // Valid double move
+                utils::log("Valid double pawn move");
+                return true;
             }
-            return false; // Invalid forward move shape/distance
+            utils::log(&format!("Invalid pawn forward move: dx={}, expected={}, start_x={}, start_rank={}", dx, expected_dx, start_x, start_rank));
+            return false;
         }
         // Diagonal Moves (Capture or En Passant)
         else if dy.abs() == 1 {
             let expected_dx = if is_white { -1 } else { 1 };
-            if dx != expected_dx { return false; } // Must move one step forward diagonally
+            if dx != expected_dx { 
+                utils::log("Invalid pawn diagonal direction");
+                return false; 
+            }
 
             // Standard Capture
             if ending_piece != 0 && ending_piece_color != piece_color {
-                return true; // Valid capture
+                utils::log("Valid pawn capture");
+                return true;
             }
             // En Passant Capture
             if ending_piece == 0 && self.is_en_passant_move(start_x, start_y, end_x, end_y) {
-                return true; // Valid en passant
+                utils::log("Valid en passant");
+                return true;
             }
-            return false; // Diagonal move to empty square (not en passant) or friendly piece
+            utils::log("Invalid pawn diagonal move");
+            return false;
         }
         else {
+            utils::log("Invalid pawn move shape");
             false
         }
     }
@@ -398,29 +442,16 @@ impl ChessGame {
         // 5. Validate Move Shape & Obstructions
         match piece_type {
             1 => { // Pawn
-                let is_white = piece_color == WHITE;
+                let is_white_attacker = piece_color == WHITE;
                 let dx = end_x - start_x;
                 let dy = end_y - start_y;
 
-                if dy == 0 { // Straight move
-                    if ending_piece != 0 { return false; } // Cannot move onto piece
-                    if !utils::is_valid_pawn_move(start_x, start_y, end_x, end_y, is_white) { return false; }
-                     // Check obstruction for double move
-                    if dx.abs() == 2 {
-                         let middle_x = start_x + dx / 2;
-                         if self.get_piece(middle_x as usize, start_y as usize) != 0 { return false; }
-                    }
-                    true
-                } else if dy.abs() == 1 { // Diagonal capture
-                    // NOTE: For attack checks, we consider a diagonal move valid even if the square is empty
-                    // because a pawn *attacks* that square. The main is_valid_move handles the capture requirement.
-                     let expected_dx = if is_white { -1 } else { 1 };
-                     dx == expected_dx
-                     // TODO: We DON'T check en passant *attacks* here, only direct diagonal threats.
-                     // Todo: En passant possibility is handled in the main is_valid_move.
-                } else {
-                    false // Invalid pawn move shape
+                if dy.abs() == 1 { // Diagonal Capture
+                let expected_dx_for_attack = if is_white_attacker {-1} else {1}; //must be 1 square forward
+                return dx == expected_dx_for_attack;
                 }
+                //If not a one--step diagonal move, the pawn is not attacking this square.
+                return false;
             },
             2 => { // Rook
                 if !utils::is_valid_rook_move(start_x, start_y, end_x, end_y) { return false; }
@@ -593,7 +624,5 @@ impl ChessGame {
     pub fn change_turn(&mut self) {
         self.current_turn = if self.current_turn == WHITE { BLACK } else { WHITE };
     }
-
-
 
 }
