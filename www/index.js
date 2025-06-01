@@ -13,22 +13,17 @@ const WHITE = 1;
 const BLACK = 2;
 
 const pieceSymbols = {
-  1: "♙",
-  2: "♖",
-  3: "♘",
-  4: "♗",
-  5: "♕",
-  6: "♔",
-  7: "♟",
-  8: "♜",
-  9: "♞",
-  10: "♝",
-  11: "♛",
-  12: "♚",
+  1: "♟", 2: "♜", 3: "♞", 4: "♝", 5: "♛", 6: "♚", // Black pieces
+  7: "♙", 8: "♖", 9: "♘", 10: "♗", 11: "♕", 12: "♔", // White pieces
 };
 
 let selectedPiece = null;
 let possibleMoves = [];
+
+const overlay = document.getElementById('checkmate-overlay');
+const notification = document.getElementById('checkmate-notification');
+const closeBtn = document.getElementById('closeNotification');
+const winnerMessage = document.getElementById('winner-message');
 
 function initChess() {
   try {
@@ -96,8 +91,15 @@ function drawChessboard() {
 
       const isPossibleMove = possibleMoves.some(move => move.row === row && move.col === col);
       if (isPossibleMove) {
-          bgColor = "rgba(0, 255, 0, 0.5)";
-          borderColor = "2px solid green";
+          // If it's a capture, maybe differnet color (e.g., red-ish green)?? 
+          const pieceAtDestination = chessgame.get_piece(row, col);
+          if (pieceAtDestination !== 0 && getPieceColor(pieceAtDestination) !== chessgame.get_current_turn()) {
+              bgColor = "rgba(255, 100, 100, 0.6)";
+              borderColor = "2px solid red";
+          } else {
+              bgColor = "rgba(0, 255, 0, 0.5)";
+              borderColor = "2px solid green";
+          }
           cursorStyle = "pointer";
       }
 
@@ -117,7 +119,7 @@ function drawChessboard() {
         pieceElement.style.width = "100%";
         pieceElement.style.height = "100%";
         pieceElement.style.color = getPieceColor(pieceValue) === WHITE ? "black" : "white";
-        pieceElement.style.pointerEvents = 'none';
+        pieceElement.style.pointerEvents = 'none'; // Prevents piece clicks from interfering with square clicks
 
         square.appendChild(pieceElement);
       }
@@ -153,12 +155,13 @@ function onSquareClick(event) {
               selectedPiece = null;
               possibleMoves = [];
               drawChessboard();
+              checkmateDetection(); // checkmate detection after every move
 
           } catch (error) {
               console.error("Move failed:", error);
               selectedPiece = null;
               possibleMoves = [];
-              drawChessboard();
+              drawChessboard(); // Redraw to clear highlights if move fails
           }
 
       } else {
@@ -201,7 +204,8 @@ function handlePieceSelection(row, col) {
   const movesArray = chessgame.get_moves(row, col);
 
   possibleMoves = [];
-  // Check if movesArray is array-like (Array, Uint8Array, etc.) and has an even number of elements
+  // Check if movesArray is array-like (Array, Uint8Array, etc.) and has an even number of elements, 
+  //arlier this throwed always false for some reason?
   if (movesArray && typeof movesArray.length === 'number' && movesArray.length % 2 === 0) {
       for (let i = 0; i < movesArray.length; i += 2) {
           possibleMoves.push({ row: movesArray[i], col: movesArray[i + 1] });
@@ -224,16 +228,77 @@ function handlePieceSelection(row, col) {
 function warnKingCheck() {
   const isInCheck = chessgame.check();
   const currentTurn = chessgame.get_current_turn();
+
   if (isInCheck) {
-    const color = currentTurn === WHITE ? WHITE : BLACK;
-    const kingPosition = chessgame.get_king_position(color); // this returns [row, col] for the king's position
-    const kingSquare = document.querySelector(`[data-row="${kingPosition[0]}"][data-col="${kingPosition[1]}"]`);
-    if (kingSquare) {
-      kingSquare.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Highlight the king in check
+
+    const kingPosition = chessgame.get_king_position(currentTurn); 
+    if (kingPosition) {
+        const kingSquare = document.querySelector(`[data-row="${kingPosition[0]}"][data-col="${kingPosition[1]}"]`);
+        if (kingSquare) {
+            kingSquare.style.backgroundColor = "rgba(255, 0, 0, 0.5)"; // Highlight the king in check
+        }
     }
-
   }
-
 }
+
+function checkmateDetection() {
+  const isCheckmate = chessgame.checkmate();
+  if (isCheckmate) {
+    const winnerPlayer = chessgame.get_current_turn() === WHITE ? "Black" : "White"; 
+    
+    showCheckmateNotification(winnerPlayer);
+  }
+}
+
+function showCheckmateNotification(winner) {
+    winnerMessage.textContent = `${winner} Wins! Checkmate!`;
+
+    // Remove 'hidden' class to make them available for transition
+    overlay.classList.remove('hidden');
+    notification.classList.remove('hidden');
+
+    // Used a small timeout to ensure the browser registers the `display: block`
+    setTimeout(() => {
+        overlay.classList.add('visible');
+        notification.classList.add('visible');
+        closeBtn.focus();
+    }, 10);
+
+    overlay.setAttribute('aria-hidden', 'false');
+    notification.setAttribute('aria-hidden', 'false');
+}
+
+function hideCheckmateNotification() {
+    // Start the fade-out and scale-down transitions
+    overlay.classList.remove('visible');
+    notification.classList.remove('visible');
+
+
+    setTimeout(() => {
+        overlay.classList.add('hidden');
+        notification.classList.add('hidden');
+    }, 300);
+
+    overlay.setAttribute('aria-hidden', 'true');
+    notification.setAttribute('aria-hidden', 'true');
+
+
+    initChess();
+}
+
+
+closeBtn.addEventListener('click', hideCheckmateNotification);
+
+overlay.addEventListener('click', hideCheckmateNotification);
+
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && notification.classList.contains('visible')) {
+        hideCheckmateNotification();
+    }
+});
+
+
+notification.setAttribute('aria-hidden', 'true');
+overlay.setAttribute('aria-hidden', 'true');
 
 initChess();

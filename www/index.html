@@ -1,26 +1,45 @@
 <!DOCTYPE html>
-<html>
-  <head>
+<html lang="en">
+<head>
     <meta charset="utf-8">
     <title>Rust WASM Chess</title>
+    <link rel="stylesheet" href="checkmate.css">
     <style>
-      body {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
-        background-color: #f0f0f0;
-        margin: 0;
-      }
-      #chessboard {
-         /* Styles moved to index.js for dynamic sizing */
-      }
-       /* TODO: add styles for selected squares, highlights etc. here later */
+        body {
+            display: flex;
+            flex-direction: column; /* To stack board and potential other elements */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+        }
+        #chessboard {
+            /* Styles for dynamic sizing are in index.js, but
+               this is some basci visual if JS fails */
+            border: 1px solid black; 
+            box-sizing: border-box;
+            background-color: #f9f9f9;
+            margin-bottom: 20px;
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
+
     <div id="chessboard"></div>
+
+    <!-- The Overlay (dimmer) -->
+    <div id="checkmate-overlay" class="hidden" aria-hidden="true"></div>
+
+    <!-- The Checkmate Notification -->
+    <div id="checkmate-notification" class="hidden" role="dialog" aria-modal="true" aria-labelledby="notification-title">
+        <h2 id="notification-title">CHECKMATE!</h2>
+        <p id="winner-message">White Wins!</p>
+        <button id="closeNotification">Got it!</button>
+        <!-- <button id="playAgainButton">Play Again</button> -->
+    </div>
+
     <script src="./bootstrap.js"></script>
   </body>
 </html>

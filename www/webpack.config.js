@@ -9,17 +9,22 @@ module.exports = {
   },
   mode: "development",
   plugins: [
-    new CopyWebpackPlugin(['index.html'])
+
+    new CopyWebpackPlugin({
+      patterns: [
+        { from: 'index.html', to: 'index.html' },
+        { from: 'checkmate.css', to: 'checkmate.css' }
+      ]
+    })
   ],
   experiments: {
-    asyncWebAssembly: true, // Enable async WebAssembly support
-    // or syncWebAssembly: true, // If you prefer synchronous WebAssembly (deprecated)
+    asyncWebAssembly: true,
   },
   module: {
     rules: [
       {
         test: /\.wasm$/,
-        type: "webassembly/async", // Ensure Webpack treats .wasm files correctly
+        type: "webassembly/async",
       },
     ],
   },
