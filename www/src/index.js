@@ -1,6 +1,6 @@
 import * as wasm from "hello-wasm-pack";
 import { ChessGame } from "chessgame";
-
+import {showCheckmateNotification, setOnNotificationClose, initNotificationEventListeners} from "./notification.js";
 let chessgame = null;
 
 const chessboardElement = document.getElementById("chessboard");
@@ -9,21 +9,16 @@ const chessboardHeight = 400;
 const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
 
-const WHITE = 1;
-const BLACK = 2;
+const WHITE = 2;
+const BLACK = 1;
 
 const pieceSymbols = {
   1: "♟", 2: "♜", 3: "♞", 4: "♝", 5: "♛", 6: "♚", // Black pieces
-  7: "♙", 8: "♖", 9: "♘", 10: "♗", 11: "♕", 12: "♔", // White pieces
+  7: "♟", 8: "♖", 9: "♘", 10: "♗", 11: "♕", 12: "♔", // White pieces
 };
 
 let selectedPiece = null;
 let possibleMoves = [];
-
-const overlay = document.getElementById('checkmate-overlay');
-const notification = document.getElementById('checkmate-notification');
-const closeBtn = document.getElementById('closeNotification');
-const winnerMessage = document.getElementById('winner-message');
 
 function initChess() {
   try {
@@ -41,10 +36,10 @@ function getPieceSymbol(pieceValue) {
 
 function getPieceColor(pieceValue) {
     if (pieceValue >= 1 && pieceValue <= 6) {
-        return WHITE;
+        return BLACK;
     }
     if (pieceValue >= 7 && pieceValue <= 12) {
-        return BLACK;
+        return WHITE;
     }
     return 0;
 }
@@ -247,58 +242,12 @@ function checkmateDetection() {
     const winnerPlayer = chessgame.get_current_turn() === WHITE ? "Black" : "White"; 
     
     showCheckmateNotification(winnerPlayer);
+    chessgame.init();
+
   }
 }
+setOnNotificationClose(initChess); // we reset the chess game when the notification is closed
+initNotificationEventListeners();
 
-function showCheckmateNotification(winner) {
-    winnerMessage.textContent = `${winner} Wins! Checkmate!`;
-
-    // Remove 'hidden' class to make them available for transition
-    overlay.classList.remove('hidden');
-    notification.classList.remove('hidden');
-
-    // Used a small timeout to ensure the browser registers the `display: block`
-    setTimeout(() => {
-        overlay.classList.add('visible');
-        notification.classList.add('visible');
-        closeBtn.focus();
-    }, 10);
-
-    overlay.setAttribute('aria-hidden', 'false');
-    notification.setAttribute('aria-hidden', 'false');
-}
-
-function hideCheckmateNotification() {
-    // Start the fade-out and scale-down transitions
-    overlay.classList.remove('visible');
-    notification.classList.remove('visible');
-
-
-    setTimeout(() => {
-        overlay.classList.add('hidden');
-        notification.classList.add('hidden');
-    }, 300);
-
-    overlay.setAttribute('aria-hidden', 'true');
-    notification.setAttribute('aria-hidden', 'true');
-
-
-    initChess();
-}
-
-
-closeBtn.addEventListener('click', hideCheckmateNotification);
-
-overlay.addEventListener('click', hideCheckmateNotification);
-
-document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && notification.classList.contains('visible')) {
-        hideCheckmateNotification();
-    }
-});
-
-
-notification.setAttribute('aria-hidden', 'true');
-overlay.setAttribute('aria-hidden', 'true');
 
 initChess();
