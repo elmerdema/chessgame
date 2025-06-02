@@ -242,8 +242,6 @@ function checkmateDetection() {
     const winnerPlayer = chessgame.get_current_turn() === WHITE ? "Black" : "White"; 
     
     showCheckmateNotification(winnerPlayer);
-    chessgame.init();
-
   }
 }
 setOnNotificationClose(initChess); // we reset the chess game when the notification is closed
