@@ -9,8 +9,8 @@ const chessboardHeight = 400;
 const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
 
-const WHITE = 2;
-const BLACK = 1;
+const WHITE = 1;
+const BLACK = 2;
 
 const B_PAWN = 7;
 const B_ROOK = 8;
@@ -70,13 +70,15 @@ function getPieceImagePath(pieceValue) {
 }
 
 function getPieceColor(pieceValue) {
-    if (pieceValue >= 1 && pieceValue <= 6) {
-        return BLACK;
-    }
-    if (pieceValue >= 7 && pieceValue <= 12) {
+    // White pieces values (1-6)
+    if (pieceValue >= W_PAWN && pieceValue <= W_KING) {
         return WHITE;
     }
-    return 0;
+    // Black pieces values (7-12)
+    if (pieceValue >= B_PAWN && pieceValue <= B_KING) {
+        return BLACK;
+    }
+    return 0; // Empty square or invalid piece
 }
 
 function drawChessboard() {
