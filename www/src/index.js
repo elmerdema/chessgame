@@ -12,24 +12,35 @@ const colors = ["#eee", "#ccc"];
 const WHITE = 2;
 const BLACK = 1;
 
-const B_PAWN = 1; const B_ROOK = 2; const B_KNIGHT = 3; const B_BISHOP = 4; const B_QUEEN = 5; const B_KING = 6;
-const W_PAWN = 7; const W_ROOK = 8; const W_KNIGHT = 9; const W_BISHOP = 10; const W_QUEEN = 11; const W_KING = 12;
+const B_PAWN = 7;
+const B_ROOK = 8;
+const B_KNIGHT = 9;
+const B_BISHOP = 10;
+const B_QUEEN = 11;
+const B_KING = 12;
 
-const pieceSymbols = {
-    // Black pieces
-    [B_PAWN]: "♟",
-    [B_ROOK]: "♜",
-    [B_KNIGHT]: "♞",
-    [B_BISHOP]: "♝",
-    [B_QUEEN]: "♛",
-    [B_KING]: "♚",
-    // White pieces
-    [W_PAWN]: "♙",
-    [W_ROOK]: "♖",
-    [W_KNIGHT]: "♘",
-    [W_BISHOP]: "♗",
-    [W_QUEEN]: "♕",
-    [W_KING]: "♔",
+const W_PAWN = 1;
+const W_ROOK = 2;
+const W_KNIGHT = 3;
+const W_BISHOP = 4;
+const W_QUEEN = 5;
+const W_KING = 6;
+
+const PIECES_BASE_PATH = "./pieces/";
+
+const pieceImageMap = {
+    [B_PAWN]: "black-pawn.png",
+    [B_ROOK]: "black-rook.png",
+    [B_KNIGHT]: "black-knight.png",
+    [B_BISHOP]: "black-bishop.png",
+    [B_QUEEN]: "black-queen.png",
+    [B_KING]: "black-king.png",
+    [W_PAWN]: "white-pawn.png",
+    [W_ROOK]: "white-rook.png",
+    [W_KNIGHT]: "white-knight.png",
+    [W_BISHOP]: "white-bishop.png",
+    [W_QUEEN]: "white-queen.png",
+    [W_KING]: "white-king.png",
 };
 
 let selectedPiece = null;
@@ -53,8 +64,9 @@ function initChess() {
     }
 }
 
-function getPieceSymbol(pieceValue) {
-    return pieceSymbols[pieceValue] || "";
+function getPieceImagePath(pieceValue) {
+    const imageName = pieceImageMap[pieceValue];
+    return imageName ? PIECES_BASE_PATH + imageName : "";
 }
 
 function getPieceColor(pieceValue) {
@@ -108,7 +120,6 @@ function drawChessboard() {
 
             const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
             if (isPossibleDestination) {
-                // If it's a capture, maybe different color (e.g., red-ish green)?? 
                 const pieceAtDestination = chessgame.get_piece(row, col);
                 if (pieceAtDestination !== 0 && getPieceColor(pieceAtDestination) !== chessgame.get_current_turn()) {
                     bgColor = "rgba(255, 100, 100, 0.6)";
@@ -124,18 +135,16 @@ function drawChessboard() {
             square.style.border = borderColor;
             square.style.boxSizing = "border-box";
             square.style.cursor = cursorStyle;
+            square.style.display = "flex";
+            square.style.justifyContent = "center";
+            square.style.alignItems = "center";
 
             if (pieceValue !== 0) {
-                const pieceElement = document.createElement("span");
-                pieceElement.textContent = getPieceSymbol(pieceValue);
-                pieceElement.style.fontSize = `${squareSize * 0.7}px`;
-                pieceElement.style.display = "flex";
-                pieceElement.style.justifyContent = "center";
-                pieceElement.style.alignItems = "center";
-                pieceElement.style.width = "100%";
-                pieceElement.style.height = "100%";
-                pieceElement.style.color = getPieceColor(pieceValue) === WHITE ? "black" : "white";
-                pieceElement.style.pointerEvents = 'none'; // Prevents piece clicks from interfering with square clicks
+                const pieceElement = document.createElement("img");
+                pieceElement.src = getPieceImagePath(pieceValue);
+                const pieceName = pieceImageMap[pieceValue].replace(/(black-|white-|\.png)/g, ''); // Extracts 'pawn', 'rook', etc.
+                pieceElement.alt = `${getPieceColor(pieceValue) === WHITE ? "White" : "Black"} ${pieceName}`;
+                pieceElement.style.pointerEvents = 'none';
 
                 square.appendChild(pieceElement);
             }
@@ -147,7 +156,7 @@ function drawChessboard() {
             chessboardElement.appendChild(square);
         }
     }
-    warnKingCheck(); // Check if the king is in check after redrawing
+    warnKingCheck();
 }
 
 async function onSquareClick(event) {
@@ -281,10 +290,13 @@ function showPromotionDialog() {
     promotionPieces.forEach(piece => {
         const choiceDiv = document.createElement("div");
         choiceDiv.classList.add("promotion-choice");
-        if (playerColor === BLACK) {
-            choiceDiv.classList.add("black-piece");
-        }
-        choiceDiv.innerHTML = `<span>${getPieceSymbol(piece.value)}</span>`;
+
+        const pieceImage = document.createElement("img");
+        pieceImage.src = getPieceImagePath(piece.value);
+        pieceImage.alt = piece.type;
+        pieceImage.style.pointerEvents = 'none';
+
+        choiceDiv.appendChild(pieceImage);
         choiceDiv.dataset.pieceValue = piece.value;
         choiceDiv.dataset.pieceType = piece.type;
         choiceDiv.addEventListener("click", onPromotionChoice);
