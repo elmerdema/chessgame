@@ -4,22 +4,26 @@ let onNotificationCloseCallback = () => {};
 
 // helper functions to get dom elements
 function getNotificationElements() {
-    const overlay = document.getElementById('checkmate-overlay');
-    const notification = document.getElementById('checkmate-notification');
+    const overlay = document.getElementById('ending-overlay');
+    const notification = document.getElementById('result-notification');
     const closeBtn = document.getElementById('closeNotification');
-    const winnerMessage = document.getElementById('winner-message');
+    const winnerMessage = document.getElementById('result-message');
     return { overlay, notification, closeBtn, winnerMessage };
 }
 
-export function showCheckmateNotification(winner) {
+export function showNotification(winner) {
     const { overlay, notification, closeBtn, winnerMessage } = getNotificationElements();
 
     if (!overlay || !notification || !winnerMessage) {
-        console.error("Notification elements not found for showCheckmateNotification.");
+        console.error("Notification elements not found for showNotification.");
         return;
     }
-
-    winnerMessage.textContent = `${winner} Wins! Checkmate!`;
+    if (winner === "draw") {
+        winnerMessage.textContent = "It's a Draw! No Checkmate.";
+    }
+    else {
+        winnerMessage.textContent = `${winner} Wins! Checkmate!`;
+    }
     overlay.classList.remove('hidden');
     notification.classList.remove('hidden');
 

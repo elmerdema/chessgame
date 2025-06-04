@@ -16,7 +16,7 @@
         }
         #chessboard {
             /* Styles for dynamic sizing are in index.js, but
-               this is some basci visual if JS fails */
+               this is some basic visual if JS fails */
             border: 1px solid black; 
             box-sizing: border-box;
             background-color: #f9f9f9;
@@ -29,15 +29,24 @@
 
     <div id="chessboard"></div>
 
-    <!-- The Overlay (dimmer) -->
-    <div id="checkmate-overlay" class="hidden" aria-hidden="true"></div>
+    <!-- The Overlay (dimmer) for checkmate/stalemate -->
+    <div id="ending-overlay" class="hidden" aria-hidden="true"></div>
 
-    <!-- The Checkmate Notification -->
-    <div id="checkmate-notification" class="hidden" role="dialog" aria-modal="true" aria-labelledby="notification-title">
+    <!-- The Checkmate/Stalemate Notification -->
+    <div id="result-notification" class="hidden" role="dialog" aria-modal="true" aria-labelledby="notification-title">
         <h2 id="notification-title">CHECKMATE!</h2>
-        <p id="winner-message">White Wins!</p>
+        <p id="result-message">White Wins!</p>
         <button id="closeNotification">Got it!</button>
-        <!-- <button id="playAgainButton">Play Again</button> -->
+    </div>
+
+    <!-- PAWN PROMOTION DIALOG -->
+    <div id="promotion-overlay" class="hidden" aria-hidden="true"></div>
+    <div id="promotion-dialog" class="hidden" role="dialog" aria-modal="true" aria-labelledby="promotion-title">
+        <h2 id="promotion-title">Pawn Promotion</h2>
+        <p>Choose a piece to promote your pawn to:</p>
+        <div id="promotion-choices">
+            <!-- Piece choices will be inserted here by JS -->
+        </div>
     </div>
 
     <script src="./bootstrap.js"></script>
