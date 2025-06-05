@@ -1,9 +1,12 @@
 import {
     getPieceImagePath,
+} from "./index.js";
+
+import {
     WHITE, BLACK,
     W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
     B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
-} from "./index.js";
+} from "./pieces.js";
 
 let _chessgame = null;
 let _promotionConstants = {};
