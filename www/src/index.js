@@ -1,6 +1,8 @@
 import { ChessGame } from "chessgame";
 import { showNotification, setOnNotificationClose, initNotificationEventListeners } from "./notification.js";
 
+import { showPromotionDialog, hidePromotionDialog, setOnPromotionCompleted, setPromotionGameAndConstants } from "./promotion.js";
+
 let chessgame = null;
 
 const chessboardElement = document.getElementById("chessboard");
@@ -9,22 +11,22 @@ const chessboardHeight = 400;
 const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
 
-const WHITE = 1;
-const BLACK = 2;
+export const WHITE = 1;
+export const BLACK = 2;
 
-const B_PAWN = 7;
-const B_ROOK = 8;
-const B_KNIGHT = 9;
-const B_BISHOP = 10;
-const B_QUEEN = 11;
-const B_KING = 12;
+export const B_PAWN = 7;
+export const B_ROOK = 8;
+export const B_KNIGHT = 9;
+export const B_BISHOP = 10;
+export const B_QUEEN = 11;
+export const B_KING = 12;
 
-const W_PAWN = 1;
-const W_ROOK = 2;
-const W_KNIGHT = 3;
-const W_BISHOP = 4;
-const W_QUEEN = 5;
-const W_KING = 6;
+export const W_PAWN = 1;
+export const W_ROOK = 2;
+export const W_KNIGHT = 3;
+export const W_BISHOP = 4;
+export const W_QUEEN = 5;
+export const W_KING = 6;
 
 const PIECES_BASE_PATH = "./pieces/";
 
@@ -46,39 +48,37 @@ const pieceImageMap = {
 let selectedPiece = null;
 let possibleMoves = [];
 
-let promotionPawnCoords = null; 
-
-// DOM elements for promotion dialog
-const promotionOverlay = document.getElementById("promotion-overlay");
 const promotionDialog = document.getElementById("promotion-dialog");
-const promotionChoicesContainer = document.getElementById("promotion-choices");
 
-function initChess() {
-    try {
-        chessgame = new ChessGame();
-        console.log("Chess game initialized:", chessgame);
-        drawChessboard();
-        hidePromotionDialog();
-    } catch (error) {
-        console.error("Error initializing chess game:", error);
-    }
-}
-
-function getPieceImagePath(pieceValue) {
+export function getPieceImagePath(pieceValue) {
     const imageName = pieceImageMap[pieceValue];
     return imageName ? PIECES_BASE_PATH + imageName : "";
 }
 
 function getPieceColor(pieceValue) {
-    // White pieces values (1-6)
     if (pieceValue >= W_PAWN && pieceValue <= W_KING) {
         return WHITE;
     }
-    // Black pieces values (7-12)
     if (pieceValue >= B_PAWN && pieceValue <= B_KING) {
         return BLACK;
     }
-    return 0; // Empty square or invalid piece
+    return 0;
+}
+
+function initChess() {
+    try {
+        chessgame = new ChessGame();
+        console.log("Chess game initialized:", chessgame);
+        setPromotionGameAndConstants(chessgame, {
+            WHITE, BLACK,
+            W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
+            B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
+        });
+        drawChessboard();
+        hidePromotionDialog();
+    } catch (error) {
+        console.error("Error initializing chess game:", error);
+    }
 }
 
 function drawChessboard() {
@@ -144,7 +144,7 @@ function drawChessboard() {
             if (pieceValue !== 0) {
                 const pieceElement = document.createElement("img");
                 pieceElement.src = getPieceImagePath(pieceValue);
-                const pieceName = pieceImageMap[pieceValue].replace(/(black-|white-|\.png)/g, ''); // Extracts 'pawn', 'rook', etc.
+                const pieceName = pieceImageMap[pieceValue].replace(/(black-|white-|\.png)/g, '');
                 pieceElement.alt = `${getPieceColor(pieceValue) === WHITE ? "White" : "Black"} ${pieceName}`;
                 pieceElement.style.pointerEvents = 'none';
 
@@ -186,12 +186,12 @@ async function onSquareClick(event) {
 
                 selectedPiece = null;
                 possibleMoves = [];
-                drawChessboard();
 
                 if (promotionInfo && promotionInfo.length === 2) {
-                    promotionPawnCoords = { x: promotionInfo[0], y: promotionInfo[1] };
-                    showPromotionDialog();
+                    // Pass the promotion pawn's coordinates to showPromotionDialog
+                    showPromotionDialog(promotionInfo[0], promotionInfo[1]);
                 } else {
+                    drawChessboard();
                     checkGameEndConditions();
                 }
 
@@ -241,8 +241,6 @@ function handlePieceSelection(row, col) {
     const movesArray = chessgame.get_moves(row, col);
 
     possibleMoves = [];
-    // Check if movesArray is array-like (Array, Uint8Array, etc.) and has an even number of elements, 
-    //earlier this throwed always false for some reason?
     if (movesArray && typeof movesArray.length === 'number' && movesArray.length % 2 === 0) {
         for (let i = 0; i < movesArray.length; i += 2) {
             possibleMoves.push({ row: movesArray[i], col: movesArray[i + 1] });
@@ -277,78 +275,6 @@ function warnKingCheck() {
     }
 }
 
-function showPromotionDialog() {
-    promotionChoicesContainer.innerHTML = "";
-
-    const playerColor = chessgame.get_current_turn();
-
-    const promotionPieces = [
-        { type: "Queen", value: playerColor === WHITE ? W_QUEEN : B_QUEEN },
-        { type: "Rook", value: playerColor === WHITE ? W_ROOK : B_ROOK },
-        { type: "Knight", value: playerColor === WHITE ? W_KNIGHT : B_KNIGHT },
-        { type: "Bishop", value: playerColor === WHITE ? W_BISHOP : B_BISHOP },
-    ];
-
-    promotionPieces.forEach(piece => {
-        const choiceDiv = document.createElement("div");
-        choiceDiv.classList.add("promotion-choice");
-
-        const pieceImage = document.createElement("img");
-        pieceImage.src = getPieceImagePath(piece.value);
-        pieceImage.alt = piece.type;
-        pieceImage.style.pointerEvents = 'none';
-
-        choiceDiv.appendChild(pieceImage);
-        choiceDiv.dataset.pieceValue = piece.value;
-        choiceDiv.dataset.pieceType = piece.type;
-        choiceDiv.addEventListener("click", onPromotionChoice);
-        promotionChoicesContainer.appendChild(choiceDiv);
-    });
-
-    promotionOverlay.classList.remove("hidden");
-    promotionOverlay.classList.add("visible");
-    promotionDialog.classList.remove("hidden");
-    promotionDialog.classList.add("visible");
-    promotionDialog.focus();
-}
-
-function hidePromotionDialog() {
-    promotionOverlay.classList.remove("visible");
-    promotionOverlay.classList.add("hidden");
-    promotionDialog.classList.remove("visible");
-    promotionDialog.classList.add("hidden");
-    promotionPawnCoords = null;
-}
-
-async function onPromotionChoice(event) {
-    const chosenPieceValue = parseInt(event.currentTarget.dataset.pieceValue);
-    const chosenPieceType = event.currentTarget.dataset.pieceType;
-
-    if (!promotionPawnCoords) {
-        console.error("No pawn promotion pending, but choice was made!");
-        hidePromotionDialog();
-        return;
-    }
-
-    const { x, y } = promotionPawnCoords;
-
-    try {
-        await chessgame.promote_pawn(x, y, chosenPieceValue);
-        console.log(`Pawn at (${x},${y}) promoted to ${chosenPieceType}.`);
-
-        hidePromotionDialog();
-        drawChessboard();
-
-        chessgame.change_turn();
-        checkGameEndConditions();
-
-    } catch (error) {
-        console.error("Error promoting pawn:", error);
-        alert(`Promotion failed: ${error.message || error}`);
-        hidePromotionDialog();
-        drawChessboard();
-    }
-}
 
 function checkGameEndConditions() {
     if (chessgame.is_stalemate()) {
@@ -358,6 +284,11 @@ function checkGameEndConditions() {
         showNotification(winnerPlayer);
     }
 }
+
+setOnPromotionCompleted(() => {
+    drawChessboard();
+    checkGameEndConditions();
+});
 
 setOnNotificationClose(initChess);
 initNotificationEventListeners();
