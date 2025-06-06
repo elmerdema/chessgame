@@ -4,31 +4,24 @@
     <meta charset="utf-8">
     <title>Rust WASM Chess</title>
     <link rel="stylesheet" href="checkmate.css">
-    <style>
-        body {
-            display: flex;
-            flex-direction: column; /* To stack board and potential other elements */
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f0f0f0;
-            margin: 0;
-        }
-        #chessboard {
-            /* Styles for dynamic sizing are in index.js, but
-               this is some basic visual if JS fails */
-            border: 1px solid black; 
-            box-sizing: border-box;
-            background-color: #f9f9f9;
-            margin-bottom: 20px;
-        }
-    </style>
 </head>
 <body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
-
-    <div id="chessboard"></div>
-
+    <div id="playground">
+        <div id="chessboard"></div>
+        <div id="board-layout-controls">
+            <img id="logo" src="pieces/gear.png" alt="setings"> 
+        </div>
+        <div id="sidebar-component">
+            <div id="game-history">
+            
+            </div>
+            <div id="chat-component">
+                <div id="chat-header">Chat</div>
+                <div id="chat-messages"></div>
+                <input type="text" id="chat-input" placeholder="Type your message here...">
+        </div>
+    </div>
     <!-- The Overlay (dimmer) for checkmate/stalemate -->
     <div id="ending-overlay" class="hidden" aria-hidden="true"></div>
 

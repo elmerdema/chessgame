@@ -45,7 +45,7 @@ export async function onPromotionChoice(event) {
 
     const { x, y } = promotionPawnCoords;
 
-    try {
+        try {
         // Ensure chessgame instance is available before trying to use it
         if (!_chessgame) {
             throw new Error("Chess game instance not set in promotion module.");
@@ -53,14 +53,15 @@ export async function onPromotionChoice(event) {
         await _chessgame.promote_pawn(x, y, chosenPieceValue);
         console.log(`Pawn at (${x},${y}) promoted to ${chosenPieceType}.`);
 
+        // FIX: Change the turn after successfully promoting the pawn.
+        _chessgame.change_turn();
+
         hidePromotionDialog();
 
         // Call the callback to signal index.js to redraw and check end conditions
         if (onPromotionCompletedCallback) {
             onPromotionCompletedCallback();
         }
-
-        // REMOVE THIS LINE: chessgame.change_turn(); // Already handled by make_move
 
     } catch (error) {
         console.error("Error promoting pawn:", error);
