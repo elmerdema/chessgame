@@ -19,7 +19,7 @@
             <div id="chat-component">
                 <div id="chat-header">Chat</div>
                 <div id="chat-messages"></div>
-                <input type="text" id="chat-input" placeholder="Type your message here...">
+                <input type="text" id="chat-input" placeholder="Type your message here..." onkeydown="sendMessage()">
         </div>
     </div>
     <!-- The Overlay (dimmer) for checkmate/stalemate -->
@@ -43,5 +43,25 @@
     </div>
 
     <script src="./bootstrap.js"></script>
+    <script>
+        const socket = new WebSocket('ws://localhost:8000/ws');
+        socket.onopen = (e) => {
+            console.log("WebSocket connection established.");
+        }
+
+        socket.onmessage = (e) => {
+            const output = document.getElementById('chat-messages');
+            output.innerHTML += '<p>' + e.data + '</p>';
+        }
+
+        function sendMessage() {
+            const messageInput = document.getElementById('chat-input');
+            if (event.key === 'Enter' && messageInput.value.trim() !== '') {
+                socket.send(messageInput.value);
+                messageInput.value = ''; 
+            }
+
+        }
+    </script>
   </body>
 </html>
