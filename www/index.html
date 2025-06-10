@@ -19,7 +19,8 @@
             <div id="chat-component">
                 <div id="chat-header">Chat</div>
                 <div id="chat-messages"></div>
-                <input type="text" id="chat-input" placeholder="Type your message here..." onkeydown="sendMessage()">
+                <!-- Pass the event object to the function -->
+                <input type="text" id="chat-input" placeholder="Type your message here..." onkeydown="sendMessage(event)">
         </div>
     </div>
     <!-- The Overlay (dimmer) for checkmate/stalemate -->
@@ -44,23 +45,31 @@
 
     <script src="./bootstrap.js"></script>
     <script>
-        const socket = new WebSocket('ws://localhost:8000/ws');
+        // *** CRITICAL CHANGE HERE ***
+        // Connect to the correct host, port, and path from your Go server
+        const socket = new WebSocket('ws://localhost:8081/ws');
+
         socket.onopen = (e) => {
             console.log("WebSocket connection established.");
         }
 
         socket.onmessage = (e) => {
             const output = document.getElementById('chat-messages');
-            output.innerHTML += '<p>' + e.data + '</p>';
+            const p = document.createElement('p');
+            p.textContent = e.data;
+            output.appendChild(p);
+            // Scroll to the bottom to see the latest message
+            output.scrollTop = output.scrollHeight;
         }
 
-        function sendMessage() {
+        // Pass the event object to the function
+        function sendMessage(event) {
             const messageInput = document.getElementById('chat-input');
+            // Check for the 'Enter' key
             if (event.key === 'Enter' && messageInput.value.trim() !== '') {
                 socket.send(messageInput.value);
                 messageInput.value = ''; 
             }
-
         }
     </script>
   </body>
