@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login or Register - Rust WASM Chess</title>
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+    <div class="auth-container">
+        <!-- LOGIN FORM -->
+        <form id="login-form" method="POST">
+            <h1>Welcome Back</h1>
+            <p>Please log in to continue</p>
+            <div class="input-group">
+                <label for="login-username">Username</label>
+                <input type="text" id="login-username" name="username" placeholder="Enter your username" required>
+            </div>
+            <div class="input-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" name="password" placeholder="Enter your password" required>
+            </div>
+            <!-- Error message placeholder -->
+            <p id="login-error" class="error-message"></p>
+            <button type="submit" class="auth-btn">Log In</button>
+            <p class="switch-form-link">
+                Don't have an account? <a id="show-register-link">Register here</a>
+            </p>
+        </form>
+
+        <!-- REGISTRATION FORM (Initially Hidden) -->
+        <form id="register-form" class="hidden" method="POST">
+            <h1>Create an Account</h1>
+            <p>Join the community to start playing</p>
+            <div class="input-group">
+                <label for="register-username">Username</label>
+                <input type="text" id="register-username" name="username" placeholder="Choose a username" required>
+            </div>
+            <div class="input-group">
+                <label for="register-password">Password</label>
+                <input type="password" id="register-password" name="password" placeholder="Create a password" required>
+            </div>
+            <div class="input-group">
+                <label for="confirm-password">Confirm Password</label>
+                <input type="password" id="confirm-password" name="confirm_password" placeholder="Confirm your password" required>
+            </div>
+            <!-- Error message placeholder -->
+            <p id="register-error" class="error-message"></p>
+            <button type="submit" class="auth-btn">Register</button>
+            <p class="switch-form-link">
+                Already have an account? <a id="show-login-link">Log in here</a>
+            </p>
+        </form>
+    </div>
+
+    <script src="auth.js"></script>
+</body>
+</html>

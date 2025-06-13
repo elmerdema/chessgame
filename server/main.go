@@ -1,14 +1,17 @@
 package main
 
-// go run ./server
+//go run .
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081/register"
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081/login"
+
 import (
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/rs/cors"
 )
 
 type Login struct {
@@ -24,25 +27,29 @@ func main() {
 	var addr = flag.String("addr", ":8081", "The addr of the application.")
 	flag.Parse()
 
-	r := newRoom()
+	// Create a new router (mux). This is better practice than using the default.
+	mux := http.NewServeMux()
 
-	// Handle the WebSocket connection for the chat room.
-	// This path must be different from the file server paths.
-	http.Handle("/ws", r)
+	mux.HandleFunc("/login", login)
+	mux.HandleFunc("/register", register)
+	mux.HandleFunc("/logout", logout)
+	mux.HandleFunc("/protected", protected)
 
-	// Serve all static files from the 'www' directory.
-	// This will serve index.html for "/" and all other files like checkmate.css, index.js etc.
-	http.Handle("/", http.FileServer(http.Dir("./www")))
-	http.HandleFunc("/login", login)
-	http.HandleFunc("/register", register)
-	http.HandleFunc("/logout", logout)
-	http.HandleFunc("/protected", protected)
-	// get the room going
-	go r.run()
+	// --- CORS Configuration ---
+	c := cors.New(cors.Options{
+		// IMPORTANT: This must be the address of your frontend server
+		AllowedOrigins:   []string{"http://localhost:8080"},
+		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type"},
+		AllowCredentials: true,
+	})
 
-	// start the web server
-	log.Println("Starting web server on", *addr)
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	// Wrap your entire mux with the CORS handler.
+	handler := c.Handler(mux)
+
+	// Start the API server on port 8081 with the CORS handler
+	log.Println("Starting API server on", *addr)
+	if err := http.ListenAndServe(*addr, handler); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
 }
@@ -55,8 +62,8 @@ func register(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 	if len(username) < 5 || len(password) < 5 {
-		err := http.StatusMethodNotAllowed
-		http.Error(w, "Invalid username/password", err)
+		err := http.StatusBadRequest
+		http.Error(w, "Username and password must be at least 5 characters", err)
 		return
 	}
 	if _, ok := users[username]; ok {

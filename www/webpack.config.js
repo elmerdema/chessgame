@@ -13,8 +13,11 @@ module.exports = {
     new CopyWebpackPlugin({
       patterns: [
         { from: 'index.html', to: 'index.html' },
+        { from: 'auth.html', to: 'auth.html' },
         { from: 'checkmate.css', to: 'checkmate.css' },
+        { from:'auth.css', to: 'auth.css' },
         { from: 'pieces/', to: 'pieces' },
+        { from: 'src/auth.js', to: 'auth.js' },
       ]
     })
   ],
