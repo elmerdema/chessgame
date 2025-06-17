@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>Rust WASM Chess</title>
     <link rel="stylesheet" href="checkmate.css">
+    <script src="main.js"></script>
 </head>
 <body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
@@ -44,33 +45,5 @@
     </div>
 
     <script src="./bootstrap.js"></script>
-    <script>
-        // *** CRITICAL CHANGE HERE ***
-        // Connect to the correct host, port, and path from your Go server
-        const socket = new WebSocket('ws://localhost:8081/ws');
-
-        socket.onopen = (e) => {
-            console.log("WebSocket connection established.");
-        }
-
-        socket.onmessage = (e) => {
-            const output = document.getElementById('chat-messages');
-            const p = document.createElement('p');
-            p.textContent = e.data;
-            output.appendChild(p);
-            // Scroll to the bottom to see the latest message
-            output.scrollTop = output.scrollHeight;
-        }
-
-        // Pass the event object to the function
-        function sendMessage(event) {
-            const messageInput = document.getElementById('chat-input');
-            // Check for the 'Enter' key
-            if (event.key === 'Enter' && messageInput.value.trim() !== '') {
-                socket.send(messageInput.value);
-                messageInput.value = ''; 
-            }
-        }
-    </script>
   </body>
 </html>

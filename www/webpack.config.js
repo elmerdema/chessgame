@@ -18,6 +18,7 @@ module.exports = {
         { from:'auth.css', to: 'auth.css' },
         { from: 'pieces/', to: 'pieces' },
         { from: 'src/auth.js', to: 'auth.js' },
+        { from: 'src/main.js', to: 'main.js' },
       ]
     })
   ],

@@ -34,6 +34,7 @@ func main() {
 	mux.HandleFunc("/register", register)
 	mux.HandleFunc("/logout", logout)
 	mux.HandleFunc("/protected", protected)
+	mux.HandleFunc("/check-auth", checkAuth)
 
 	room := newRoom()
 	mux.Handle("/ws", room)
@@ -145,7 +146,6 @@ func protected(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	username := r.FormValue("username")
-	//ca asht %s????
 	fmt.Fprintf(w, "CSRF validation successful! Welcome %s", username)
 }
 
@@ -172,4 +172,33 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	user.CSRFToken = ""
 	users[username] = user
 	fmt.Fprintln(w, "Logged out successfully!")
+}
+
+func checkAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Invalid Method, expected GET request", http.StatusMethodNotAllowed)
+		return
+	}
+	sessionCookie, err := r.Cookie("session_token")
+	if err != nil {
+		http.Error(w, "Unathorized", http.StatusUnauthorized)
+		return
+	}
+	sessionToken := sessionCookie.Value
+	var foundUsername string
+	for username, loginData := range users {
+		if loginData.SessionToken == sessionToken {
+			foundUsername = username
+			break
+		}
+	}
+	if foundUsername == "" {
+		http.Error(w, "Unathorized", http.StatusUnauthorized)
+		return
+	}
+
+	//user is authenticated
+	w.Header().Set("Content-Type", "application/json")
+
+	fmt.Fprintf(w, `{"isLoggedIn": true, "username": "%s"}`, foundUsername)
 }

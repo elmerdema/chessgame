@@ -29,7 +29,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
         const response = await fetch('http://localhost:8081/login', {
             method: 'POST',
-            body: formData
+            body: formData,
+            credentials: 'include' // Include cookies for session management
         });
     
         if (response.ok) {
