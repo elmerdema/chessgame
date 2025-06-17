@@ -4,9 +4,8 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// client represents a single chatting user.
-
-type client struct {
+// Client represents a single chatting user.
+type Client struct {
 
 	// socket is the web socket for this client.
 	socket *websocket.Conn
@@ -18,7 +17,7 @@ type client struct {
 	room *room
 }
 
-func (c *client) read() {
+func (c *Client) read() {
 	defer c.socket.Close()
 	for {
 		_, msg, err := c.socket.ReadMessage()
@@ -29,7 +28,7 @@ func (c *client) read() {
 	}
 }
 
-func (c *client) write() {
+func (c *Client) write() {
 	defer c.socket.Close()
 	for msg := range c.receive {
 		err := c.socket.WriteMessage(websocket.TextMessage, msg)

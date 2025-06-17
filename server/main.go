@@ -35,6 +35,11 @@ func main() {
 	mux.HandleFunc("/logout", logout)
 	mux.HandleFunc("/protected", protected)
 
+	room := newRoom()
+	mux.Handle("/ws", room)
+
+	go room.run()
+
 	// --- CORS Configuration ---
 	c := cors.New(cors.Options{
 		// IMPORTANT: This must be the address of your frontend server
@@ -55,9 +60,13 @@ func main() {
 }
 
 func register(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	if r.Method != http.MethodPost {
 		err := http.StatusMethodNotAllowed
 		http.Error(w, "Invalid method", err)
+		return
 	}
 	username := r.FormValue("username")
 	password := r.FormValue("password")
@@ -76,10 +85,12 @@ func register(w http.ResponseWriter, r *http.Request) {
 		HashedPassword: hashedPassword,
 	}
 	fmt.Fprintln(w, "User registered successfully!")
-
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	if r.Method != http.MethodPost {
 		err := http.StatusMethodNotAllowed
 		http.Error(w, "Invalid request method", err)
@@ -120,6 +131,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 // lexoje prap kyt funksion
 func protected(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 	if r.Method != http.MethodPost {
 		err := http.StatusMethodNotAllowed
 		http.Error(w, "Invalid request method", err)
@@ -133,7 +147,6 @@ func protected(w http.ResponseWriter, r *http.Request) {
 	username := r.FormValue("username")
 	//ca asht %s????
 	fmt.Fprintf(w, "CSRF validation successful! Welcome %s", username)
-
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
@@ -159,5 +172,4 @@ func logout(w http.ResponseWriter, r *http.Request) {
 	user.CSRFToken = ""
 	users[username] = user
 	fmt.Fprintln(w, "Logged out successfully!")
-
 }

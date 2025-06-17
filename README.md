@@ -82,3 +82,22 @@ Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
+
+## Running the Project
+
+1.  **Start the Backend Server:**
+    -   Navigate to the `server` directory: `cd server`
+    -   Run the server: `go run .`
+    -   The server will start on `http://localhost:8081`.
+
+2.  **Start the Frontend Development Server:**
+    -   Navigate to the `www` directory: `cd www`
+    -   Install dependencies: `npm install`
+    -   Start the webpack development server: `npm start`
+    -   The frontend will be available at `http://localhost:8080`.
+
+3.  **Access the Application:**
+    -   Open your web browser and go to `http://localhost:8080/auth.html` to log in or register.
+    -   After logging in, you will be redirected to the main chess application at `http://localhost:8080/`.
+
+## Project Structure
