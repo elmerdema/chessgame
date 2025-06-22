@@ -22,20 +22,17 @@
         console.error('Authentication check failed:', error);
     }
 })();
-
-// This function only runs for authenticated users
+// only runs for authenticated users
 function initializeApp(username) {
     // Wait for the main HTML document to be ready
     document.addEventListener('DOMContentLoaded', () => {
         console.log(`User '${username}' authenticated. Initializing chess app.`);
 
-        // Update UI with username
         const chatHeader = document.getElementById('chat-header');
         if (chatHeader) {
             chatHeader.textContent = `Chat (${username})`;
         }
 
-        //load the WASM bootstrap script
         const bootstrapScript = document.createElement('script');
         bootstrapScript.src = './bootstrap.js';
         document.body.appendChild(bootstrapScript);
@@ -71,7 +68,7 @@ function setupWebSocket(username) {
     window.sendMessage = function(event) {
         const messageInput = document.getElementById('chat-input');
         if (event.key === 'Enter' && messageInput.value.trim() !== '') {
-            
+
             socket.send(messageInput.value);
             messageInput.value = ''; 
         }

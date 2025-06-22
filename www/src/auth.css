@@ -6,20 +6,20 @@ body {
     align-items: center;
     min-height: 100vh;
     margin: 0;
-    background-color: #2c3e50; /* Dark slate blue */
+    background-color: #2c3e50;
     color: #ecf0f1;
 }
 
 /* The main container for both forms */
 .auth-container {
-    background-color: #34495e; /* Lighter slate blue */
+    background-color: #34495e;
     padding: 2.5rem;
     border-radius: 10px;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     width: 100%;
     max-width: 400px;
     text-align: center;
-    overflow: hidden; /* Helps with transitions if you add them */
+    overflow: hidden;
 }
 
 /* Hide forms that are not active */
@@ -35,7 +35,7 @@ h1 {
 
 .auth-container p {
     margin-bottom: 2rem;
-    color: #bdc3c7; /* Light grey for subtitles */
+    color: #bdc3c7;
 }
 
 /* Input Group Styles */
@@ -89,7 +89,7 @@ h1 {
 }
 
 .auth-btn:hover {
-    background-color: #2980b9; /* Darker blue on hover */
+    background-color: #2980b9;
 }
 
 /* Link to switch between forms */
