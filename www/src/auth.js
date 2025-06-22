@@ -27,14 +27,14 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('username', username);
         formData.append('password', password);
     
-        const response = await fetch('http://localhost:8081/login', {
+        const response = await fetch('http://localhost:8081/api/login', {
             method: 'POST',
             body: formData,
             credentials: 'include' // Include cookies for session management
         });
     
         if (response.ok) {
-            window.location.href = 'index.html';
+            window.location.href = 'lobby.html';
         } else {
             const errorMessage = await response.text();
             loginError.textContent = errorMessage;
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('username', username);
         formData.append('password', password);
     
-        const response = await fetch('http://localhost:8081/register', {
+        const response = await fetch('http://localhost:8081/api/register', {
             method: 'POST',
             body: formData
         });

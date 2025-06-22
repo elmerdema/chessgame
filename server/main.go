@@ -27,30 +27,28 @@ func main() {
 	var addr = flag.String("addr", ":8081", "The addr of the application.")
 	flag.Parse()
 
-	// Create a new router (mux). This is better practice than using the default.
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/login", login)
-	mux.HandleFunc("/register", register)
-	mux.HandleFunc("/logout", logout)
-	mux.HandleFunc("/protected", protected)
-	mux.HandleFunc("/check-auth", checkAuth)
+	mux.HandleFunc("/api/login", login)
+	mux.HandleFunc("/api/register", register)
+	mux.HandleFunc("/api/logout", logout)
+	mux.HandleFunc("/api/protected", protected)
+	mux.HandleFunc("/api/check-auth", checkAuth)
 
 	room := newRoom()
 	mux.Handle("/ws", room)
 
 	go room.run()
 
-	// --- CORS Configuration ---
 	c := cors.New(cors.Options{
-		// IMPORTANT: This must be the address of your frontend server
+		// localhost of the frontend server
 		AllowedOrigins:   []string{"http://localhost:8080"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
 	})
 
-	// Wrap your entire mux with the CORS handler.
+	//CORS handler.
 	handler := c.Handler(mux)
 
 	// Start the API server on port 8081 with the CORS handler

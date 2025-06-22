@@ -15,10 +15,13 @@ module.exports = {
         { from: 'index.html', to: 'index.html' },
         { from: 'auth.html', to: 'auth.html' },
         { from: 'checkmate.css', to: 'checkmate.css' },
-        { from:'auth.css', to: 'auth.css' },
+        { from:'src/auth.css', to: 'auth.css' },
         { from: 'pieces/', to: 'pieces' },
         { from: 'src/auth.js', to: 'auth.js' },
         { from: 'src/main.js', to: 'main.js' },
+        { from:'lobby.html', to:'lobby.html' },
+        { from:'src/lobby.css', to:'lobby.css' },
+        { from:'src/lobby.js', to:'lobby.js' },
       ]
     })
   ],

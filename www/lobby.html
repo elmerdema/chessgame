@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Lobby - Rust WASM Chess</title>
+    <link rel="stylesheet" href="lobby.css">
+</head>
+<body>
+    <div id="lobby-container">
+        <header>
+            <h1>Game Lobby</h1>
+            <div id="user-info">
+                <span>Welcome, Player!</span>
+                <!-- Added a class for consistent button styling -->
+                <button id="logout-button" class="btn btn-secondary">Logout</button>
+            </div>
+        </header>
+
+        <main>
+            <section id="matchmaking" class="lobby-panel">
+                <h2>Matchmaking</h2>
+                <!-- Added a class for consistent button styling -->
+                <button id="find-match-button" class="btn btn-primary">Find Match</button>
+                <p id="matchmaking-status">Click the button to find an opponent.</p>
+            </section>
+
+            <section id="leaderboard" class="lobby-panel">
+                <h2>Leaderboard</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Player</th>
+                            <th>Rating</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboard-body">
+                        <!-- Leaderboard data will be dynamically inserted here -->
+                        <tr>
+                            <td>1</td>
+                            <td>Magnus</td>
+                            <td>2830</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>Fabiano</td>
+                            <td>2805</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>Hikaru</td>
+                            <td>2789</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>Alireza</td>
+                            <td>2750</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <script src="lobby.js"></script>
+</body>
+</html>

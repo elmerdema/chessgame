@@ -1,7 +1,7 @@
 // this function runs immediately to guard the page
 (async function checkAuthentication() {
     try {
-        const response = await fetch('http://localhost:8081/check-auth', {
+        const response = await fetch('http://localhost:8081/api/check-auth', {
             method: 'GET',
             credentials: 'include' // cookies
         });
@@ -67,11 +67,11 @@ function setupWebSocket(username) {
         console.error("WebSocket error:", e);
     };
 
-    //   attach it to the global window object.
+    //attach it to the global window object.
     window.sendMessage = function(event) {
         const messageInput = document.getElementById('chat-input');
         if (event.key === 'Enter' && messageInput.value.trim() !== '') {
-            // The server will know who sent it, so we just send the raw message.
+            
             socket.send(messageInput.value);
             messageInput.value = ''; 
         }
