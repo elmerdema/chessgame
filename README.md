@@ -91,6 +91,7 @@ conditions.
     -   The server will start on `http://localhost:8081`.
 
 2.  **Start the Frontend Development Server:**
+    -   Build the wasm part using `wasm-pack build`
     -   Navigate to the `www` directory: `cd www`
     -   Install dependencies: `npm install`
     -   Start the webpack development server: `npm start`

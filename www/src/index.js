@@ -5,17 +5,19 @@ import {
     B_PAWN, B_ROOK, B_KNIGHT, B_BISHOP, B_QUEEN, B_KING,
     W_PAWN, W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING,
     pieceImageMap
-} from "./pieces.js"; 
+} from "./pieces.js";
 import { showPromotionDialog, hidePromotionDialog, setOnPromotionCompleted, setPromotionGameAndConstants } from "./promotion.js";
 
+const API_BASE_URL = "http://localhost:8081/api";
 let chessgame = null;
+let currentGameID = null;
+let isProcessingMove = false;
 
 const chessboardElement = document.getElementById("chessboard");
 const chessboardWidth = 400;
 const chessboardHeight = 400;
 const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
-
 
 const PIECES_BASE_PATH = "./pieces/";
 
@@ -39,19 +41,42 @@ function getPieceColor(pieceValue) {
     return 0;
 }
 
-function initChess() {
+async function initChess() {
     try {
-        chessgame = new ChessGame();
-        console.log("Chess game initialized:", chessgame);
-        setPromotionGameAndConstants(chessgame, {
-            WHITE, BLACK,
-            W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
-            B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
-        });
+        if (!chessgame) {
+            chessgame = new ChessGame();
+            console.log("WASM module loaded.");
+             setPromotionGameAndConstants(chessgame, {
+                WHITE, BLACK,
+                W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
+                B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
+            });
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/game/new`, { method: "POST" });
+        if (!response.ok) {
+            throw new Error(`Failed to create new game: ${response.statusText}`);
+        }
+        const gameData = await response.json();
+
+        currentGameID = gameData.gameID;
+        const initialFEN = gameData.fen;
+        
+        console.log(`New game started with ID: ${currentGameID}`);
+        console.log(`Initial FEN: ${initialFEN}`);
+
+        chessgame.load_fen(initialFEN);
+
+        selectedPiece = null;
+        possibleMoves = [];
+        isProcessingMove = false;
+        
         drawChessboard();
         hidePromotionDialog();
+
     } catch (error) {
         console.error("Error initializing chess game:", error);
+        alert("Could not connect to the server to start a new game.");
     }
 }
 
@@ -135,7 +160,23 @@ function drawChessboard() {
     warnKingCheck();
 }
 
+function coordsToAlgebraic(startRow, startCol, endRow, endCol) {
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const ranks = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+    const startFile = files[startCol];
+    const startRank = ranks[startRow];
+    const endFile = files[endCol];
+    const endRank = ranks[endRow];
+
+    return `${startFile}${startRank}${endFile}${endRank}`;
+}
+
 async function onSquareClick(event) {
+    if (isProcessingMove || !currentGameID) {
+        console.log("Ignoring click: a move is already being processed or game not started.");
+        return;
+    }
     if (!promotionDialog.classList.contains("hidden")) {
         console.log("Promotion dialog active, ignoring board click.");
         return;
@@ -145,8 +186,6 @@ async function onSquareClick(event) {
     const row = parseInt(square.dataset.row);
     const col = parseInt(square.dataset.col);
 
-    console.log(`Clicked square: ${row}, ${col}`);
-
     if (selectedPiece) {
         const startRow = selectedPiece.row;
         const startCol = selectedPiece.col;
@@ -154,16 +193,35 @@ async function onSquareClick(event) {
         const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
 
         if (isPossibleDestination) {
+            isProcessingMove = true;
+            const moveStr = coordsToAlgebraic(startRow, startCol, row, col);
+            console.log(`Attempting to send move: ${moveStr}`);
+
             try {
-                const promotionInfo = await chessgame.make_move(startRow, startCol, row, col);
-                console.log(`Move successful: ${startRow},${startCol} to ${row},${col}. Promotion info:`, promotionInfo);
+                const response = await fetch(`${API_BASE_URL}/game/${currentGameID}/move`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ move: moveStr }),
+                });
 
-                selectedPiece = null;
-                possibleMoves = [];
+                const moveResult = await response.json();
 
-                if (promotionInfo && promotionInfo.length === 2) {
-                    // Pass the promotion pawn's coordinates to showPromotionDialog
-                    showPromotionDialog(promotionInfo[0], promotionInfo[1]);
+                if (!response.ok) {
+                    throw new Error(moveResult.message || 'Invalid move');
+                }
+
+                console.log("Server accepted move. New FEN:", moveResult.newFEN);
+                chessgame.load_fen(moveResult.newFEN);
+
+                const movedPiece = chessgame.get_piece(row, col);
+                const pieceType = (movedPiece - 1) % 6 + 1;
+                const pieceColor = getPieceColor(movedPiece);
+                const isPromotion = (pieceType === 1) && ((pieceColor === WHITE && row === 0) || (pieceColor === BLACK && row === 7));
+
+                if (isPromotion) {
+                    showPromotionDialog(row, col);
                 } else {
                     drawChessboard();
                     checkGameEndConditions();
@@ -171,40 +229,28 @@ async function onSquareClick(event) {
 
             } catch (error) {
                 console.error("Move failed:", error);
+                alert(`Invalid move: ${error.message}`);
+            } finally {
                 selectedPiece = null;
                 possibleMoves = [];
+                isProcessingMove = false;
                 drawChessboard();
-                alert(`Invalid move: ${error.message || error}`);
             }
 
         } else {
-            console.log("Clicked outside valid moves for the selected piece. Deselecting current and checking new square.");
             selectedPiece = null;
             possibleMoves = [];
-
-            const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
-            const currentTurn = chessgame.get_current_turn();
-            const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
-
-            console.log(`Checking new square for selection: (${row},${col}), Value: ${pieceValueAtClickedSquare}, Color: ${pieceColorAtClickedSquare}, Current Turn: ${currentTurn}`);
-
-            if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+            const pieceValue = chessgame.get_piece(row, col);
+            if (pieceValue !== 0 && getPieceColor(pieceValue) === chessgame.get_current_turn()) {
                 handlePieceSelection(row, col);
             } else {
-                console.log("New square is empty or not your piece. Board redrawn, nothing selected.");
                 drawChessboard();
             }
         }
-
     } else {
-        const pieceValueAtClickedSquare = chessgame.get_piece(row, col);
-        const currentTurn = chessgame.get_current_turn();
-        const pieceColorAtClickedSquare = getPieceColor(pieceValueAtClickedSquare);
-
-        if (pieceValueAtClickedSquare !== 0 && pieceColorAtClickedSquare === currentTurn) {
+        const pieceValue = chessgame.get_piece(row, col);
+        if (pieceValue !== 0 && getPieceColor(pieceValue) === chessgame.get_current_turn()) {
             handlePieceSelection(row, col);
-        } else {
-            console.log("Cannot select: Empty square or not your piece.");
         }
     }
 }
@@ -236,7 +282,6 @@ function handlePieceSelection(row, col) {
 
 function warnKingCheck() {
     const isInCheck = chessgame.check();
-    // const currentTurn = chessgame.get_current_turn();
 
     if (isInCheck) {
         const kingPosition = chessgame.get_king_position();

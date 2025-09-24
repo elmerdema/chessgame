@@ -4,10 +4,7 @@ package main
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081/api/register"
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081//apilogin"
 //curl -X POST "http://localhost:8081/api/game/new"
-// curl -X POST \
-//   -H "Content-Type: application/json" \
-//   -d '{"move": "e2e4"}' \
-//   "http://localhost:8081/api/game/YOUR_GAME_ID_HERE/move"
+// curl -X POST -H "Content-Type: application/json" -d "{\"move\": \"e2e4\"}" "http://localhost:8081/api/game/YOUR_GAME_ID_HERE/move"
 import (
 	"encoding/json"
 	"flag"
@@ -231,6 +228,7 @@ func createNewGame(w http.ResponseWriter, r *http.Request) {
 		"gameID": gameID,
 		"fen":    game.FEN(),
 	}
+
 	sendJSONResponse(w, http.StatusAccepted, response)
 }
 

@@ -688,4 +688,62 @@ impl ChessGame {
         self.board[x][y] = new_piece;
         Ok(())
     }
+    #[wasm_bindgen]
+pub fn load_fen(&mut self, fen:&str) -> Result<(), JsValue> {
+    let parts: Vec<&str> = fen.split_whitespace().collect();
+    if parts.len() < 4 {
+        return Err(JsValue::from_str("Invalid FEN string"));
+
+    }
+
+    let mut new_board = vec![vec![0; 8]; 8];
+    let piece_placement = parts[0];
+    let mut row = 0;
+    for rank in piece_placement.split('/') {
+        let mut col = 0;
+        for ch in rank.chars() {
+            if col >= 8 { break; }
+            if let Some(digit) = ch.to_digit(10) {
+                col += digit as usize;
+            } else {
+                let piece = match ch {
+                    'p' => B_PAWN, 'r' => B_ROOK, 'n' => B_KNIGHT, 'b' => B_BISHOP, 'q' => B_QUEEN, 'k' => B_KING,
+                    'P' => W_PAWN, 'R' => W_ROOK, 'N' => W_KNIGHT, 'B' => W_BISHOP, 'Q' => W_QUEEN, 'K' => W_KING,
+                    _ => 0,
+                };
+                if piece != 0 {
+                    new_board[row][col] = piece;
+                }
+                col += 1;
+            }
+        }
+        row += 1;
+        if row >= 8 { break; }
+    }
+    self.board = new_board;
+
+    self.current_turn = if parts[1]== "w" { WHITE} else {BLACK}; //active color 
+
+    //castling
+    let castling = parts[2];
+    self.white_can_castle_kingside = castling.contains('K');
+    self.white_can_castle_queenside = castling.contains('Q');
+    self.black_can_castle_kingside = castling.contains('k');
+    self.black_can_castle_queenside = castling.contains('q');
+
+    let en_passant = parts[3];
+    if en_passant == "-" {
+        self.en_passant_target = None;
+    } else {
+        let file = en_passant.chars().nth(0).unwrap() as usize - 'a' as usize;
+        let rank = 8 - en_passant.chars().nth(1).unwrap().to_digit(10).unwrap() as usize;
+        self.en_passant_target = Some((rank, file));
+    }
+    // TODO:
+    // Ignoring halfmove clock (parts[4]) and fullmove number (parts[5]) for now
+
+    Ok(())
+
+
+}
 }
