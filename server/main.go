@@ -256,12 +256,32 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 			return
 		}
 
-		//  core verification logic
-		err := game.MoveStr(req.Move)
-		if err != nil {
+		var moveErr error
+		// The move string from JS is in coordinate notation (e.g., "e2e4", "d1h5")
+		moveStr := req.Move
+
+		// We need to find the specific move from the list of valid moves.
+		var foundMove *chess.Move
+		for _, validMove := range game.ValidMoves() {
+			// validMove.String() formats the move in the same "e2e4" coordinate style
+			if validMove.String() == moveStr {
+				foundMove = validMove
+				break
+			}
+		}
+
+		if foundMove != nil {
+			// We found a valid move object, apply it directly
+			moveErr = game.Move(foundMove)
+		} else {
+			// If we couldn't find a matching move, the move is illegal.
+			moveErr = fmt.Errorf("illegal move %s", moveStr)
+		}
+
+		if moveErr != nil {
 			sendJSONResponse(w, http.StatusBadRequest, MoveResponse{
 				Status:  "error",
-				Message: fmt.Sprintf("Illegal move: %s", err.Error()),
+				Message: fmt.Sprintf("Illegal move: %s", moveErr.Error()),
 			})
 			return
 		}
@@ -269,7 +289,6 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		// if move was valid, the game state is updated.
 		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, game.FEN())
 
-		// Authoritative response
 		response := MoveResponse{
 			Status:  "ok",
 			NewFEN:  game.FEN(),
@@ -277,7 +296,6 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 			Turn:    game.Position().Turn().Name(),
 		}
 
-		//Broadcast the new state to all clients in the room via WebSockets
 		broadcastMessage, err := json.Marshal(response)
 		if err == nil {
 			room.forward <- broadcastMessage
