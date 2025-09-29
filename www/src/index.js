@@ -51,6 +51,9 @@ async function initChess() {
                 W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
                 B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
             });
+            setOnPromotionCompleted((startRow, startCol, endRow, endCol, promotionChar) => {
+                syncMoveWithServer(startRow, startCol, endRow, endCol, promotionChar);
+            });
         }
         
         const response = await fetch(`${API_BASE_URL}/game/new`, { method: "POST" });
@@ -173,12 +176,7 @@ function coordsToAlgebraic(startRow, startCol, endRow, endCol) {
 }
 
 async function onSquareClick(event) {
-    if (isProcessingMove || !currentGameID) {
-        console.log("Ignoring click: a move is already being processed or game not started.");
-        return;
-    }
-    if (!promotionDialog.classList.contains("hidden")) {
-        console.log("Promotion dialog active, ignoring board click.");
+    if (isProcessingMove || !currentGameID || !promotionDialog.classList.contains("hidden")) {
         return;
     }
 
@@ -190,53 +188,31 @@ async function onSquareClick(event) {
         const startRow = selectedPiece.row;
         const startCol = selectedPiece.col;
 
-        const isPossibleDestination = possibleMoves.some(move => move.row === row && move.col === col);
-
-        if (isPossibleDestination) {
+        if (possibleMoves.some(move => move.row === row && move.col === col)) {
             isProcessingMove = true;
-            const moveStr = coordsToAlgebraic(startRow, startCol, row, col);
-            console.log(`Attempting to send move: ${moveStr}`);
-
+            const movingPiece = { startRow, startCol, endRow: row, endCol: col };
+            selectedPiece = null;
+            possibleMoves = [];
+            
             try {
-                const response = await fetch(`${API_BASE_URL}/game/${currentGameID}/move`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ move: moveStr }),
-                });
+                const promotionCoords = await chessgame.make_move(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
 
-                const moveResult = await response.json();
+                drawChessboard();
 
-                if (!response.ok) {
-                    throw new Error(moveResult.message || 'Invalid move');
-                }
-
-                console.log("Server accepted move. New FEN:", moveResult.newFEN);
-                chessgame.load_fen(moveResult.newFEN);
-
-                const movedPiece = chessgame.get_piece(row, col);
-                const pieceType = (movedPiece - 1) % 6 + 1;
-                const pieceColor = getPieceColor(movedPiece);
-                const isPromotion = (pieceType === 1) && ((pieceColor === WHITE && row === 0) || (pieceColor === BLACK && row === 7));
-
-                if (isPromotion) {
-                    showPromotionDialog(row, col);
+                if (isTruthy) {
+                    console.log("Promotion condition met! Showing dialog.");
+                    showPromotionDialog(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
                 } else {
-                    drawChessboard();
-                    checkGameEndConditions();
+                    console.log("Promotion condition NOT met. Syncing with server.");
+                    await syncMoveWithServer(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
                 }
 
             } catch (error) {
-                console.error("Move failed:", error);
-                alert(`Invalid move: ${error.message}`);
-            } finally {
-                selectedPiece = null;
-                possibleMoves = [];
+                console.error("WASM move validation failed:", error);
+                alert(`Invalid move: ${error.message || error}`);
                 isProcessingMove = false;
                 drawChessboard();
             }
-
         } else {
             selectedPiece = null;
             possibleMoves = [];
@@ -248,12 +224,41 @@ async function onSquareClick(event) {
             }
         }
     } else {
-        const pieceValue = chessgame.get_piece(row, col);
-        if (pieceValue !== 0 && getPieceColor(pieceValue) === chessgame.get_current_turn()) {
-            handlePieceSelection(row, col);
-        }
+        handlePieceSelection(row, col);
     }
 }
+
+async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionChar = '') {
+    const moveStr = coordsToAlgebraic(startRow, startCol, endRow, endCol) + promotionChar;
+    console.log(`Syncing move with server: ${moveStr}`);
+    
+    try {
+        const response = await fetch(`${API_BASE_URL}/game/${currentGameID}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ move: moveStr }),
+        });
+
+        const moveResult = await response.json();
+        if (!response.ok) {
+            // client and server are out of sync
+            throw new Error(moveResult.message || 'Server rejected a locally-validated move!');
+        }
+
+        console.log("Server state synced. New FEN:", moveResult.newFEN);
+        // Re-sync our local board with the server's state
+        chessgame.load_fen(moveResult.newFEN);
+        checkGameEndConditions();
+
+    } catch (error) {
+        console.error("Failed to sync with server:", error);
+        alert(`A critical error occurred: ${error.message}. The game might be out of sync. Please refresh.`);
+    } finally {
+        isProcessingMove = false; // Allow next move
+        drawChessboard();
+    }
+}
+
 
 function handlePieceSelection(row, col) {
     selectedPiece = { row, col };
