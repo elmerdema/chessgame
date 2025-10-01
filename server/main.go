@@ -20,6 +20,13 @@ import (
 	"github.com/rs/cors"
 )
 
+type GameSession struct {
+	Game        *chess.Game
+	PlayerWhite string
+	PlayerBlack string
+	State       string
+}
+
 type Login struct {
 	HashedPassword string
 	SessionToken   string
@@ -29,7 +36,7 @@ type Login struct {
 // TODO: setup real db here in the future
 var users = map[string]Login{}
 
-var games = make(map[string]*chess.Game)
+var games = make(map[string]*GameSession)
 var gamesMutex = &sync.RWMutex{}
 
 func main() {
@@ -44,9 +51,9 @@ func main() {
 	api.HandleFunc("/logout", logout).Methods("POST", "OPTIONS")
 	api.HandleFunc("/protected", protected).Methods("POST", "OPTIONS")
 	api.HandleFunc("/check-auth", checkAuth).Methods("GET", "OPTIONS")
-
-	api.HandleFunc("/game/new", createNewGame).Methods("POST", "OPTIONS")
-
+	api.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
+	api.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
+	api.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
 	room := newRoom()
 
 	api.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
@@ -142,7 +149,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 	fmt.Println(w, "Login Successful")
 }
 
-// lexoje prap kyt funksion
 func protected(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
@@ -215,25 +221,58 @@ func checkAuth(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"isLoggedIn": true, "username": "%s"}`, foundUsername)
 }
 
-func createNewGame(w http.ResponseWriter, r *http.Request) {
+func joinGame(w http.ResponseWriter, r *http.Request) {
+	username, err := getUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized, please login to join a game", http.StatusUnauthorized)
+		return
+	}
+	vars := mux.Vars(r)
+	gameID := vars["id"]
+
 	gamesMutex.Lock()
 	defer gamesMutex.Unlock()
 
-	gameID := uuid.New().String() //generate new unique id for tjhe game
-	game := chess.NewGame()
-	games[gameID] = game
-	log.Printf("New game created with Id %s", &gameID)
+	gameSession, ok := games[gameID]
+	if !ok {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+	if gameSession.State != "waiting" {
+		http.Error(w, "Game is not available to join", http.StatusConflict)
+		return
+	}
+
+	if gameSession.State == username {
+		http.Error(w, "You cannot join your own game.", http.StatusBadRequest)
+		return
+	}
+
+	gameSession.PlayerBlack = username
+	gameSession.State = "in_progress"
+	games[gameID] = gameSession
+
+	log.Printf("User %s joined game %s as Black. Game is now in progress", username, gameID)
+
+	// TODO: Use the WebSocket to notify PlayerWhite that the game has started!
+	// room.forward <- ... some message ...
 
 	response := map[string]string{
 		"gameID": gameID,
-		"fen":    game.FEN(),
+		"fen":    gameSession.Game.FEN(),
+		"color":  "black",
 	}
+	sendJSONResponse(w, http.StatusOK, response)
 
-	sendJSONResponse(w, http.StatusAccepted, response)
 }
 
 func makeMoveHandler(room *room) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		username, err := getUsernameFromSession(r)
+		if err != nil {
+			http.Error(w, "Unauthorized,", http.StatusUnauthorized)
+			return
+		}
 		vars := mux.Vars(r)
 		gameID, ok := vars["id"]
 		if !ok {
@@ -250,10 +289,22 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		gamesMutex.Lock()
 		defer gamesMutex.Unlock()
 
-		game, ok := games[gameID]
+		gameSession, ok := games[gameID]
 		if !ok {
 			http.Error(w, "Game not found", http.StatusNotFound)
 			return
+		}
+
+		turn := gameSession.Game.Position().Turn()
+		isWhitesTurn := turn == chess.White
+		isBlacksTurn := turn == chess.Black
+
+		if (isWhitesTurn && username != gameSession.PlayerWhite) ||
+			(isBlacksTurn && username != gameSession.PlayerBlack) {
+			log.Printf("Illegal move attempt in game %s by user %s. Not their turn.", gameID, username)
+			http.Error(w, "Not your turn.", http.StatusForbidden) // 403 Forbidden is appropriate here
+			return
+
 		}
 
 		var moveErr error
@@ -262,7 +313,7 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 
 		// We need to find the specific move from the list of valid moves.
 		var foundMove *chess.Move
-		for _, validMove := range game.ValidMoves() {
+		for _, validMove := range gameSession.Game.ValidMoves() {
 			// validMove.String() formats the move in the same "e2e4" coordinate style
 			if validMove.String() == moveStr {
 				foundMove = validMove
@@ -272,7 +323,7 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 
 		if foundMove != nil {
 			// We found a valid move object, apply it directly
-			moveErr = game.Move(foundMove)
+			moveErr = gameSession.Game.Move(foundMove)
 		} else {
 			// If we couldn't find a matching move, the move is illegal.
 			moveErr = fmt.Errorf("illegal move %s", moveStr)
@@ -287,20 +338,106 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		}
 
 		// if move was valid, the game state is updated.
-		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, game.FEN())
+		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, gameSession.Game.FEN())
 
 		response := MoveResponse{
+			GameID:  gameID,
 			Status:  "ok",
-			NewFEN:  game.FEN(),
-			Outcome: string(game.Outcome()),
-			Turn:    game.Position().Turn().Name(),
+			NewFEN:  gameSession.Game.FEN(),
+			Outcome: string(gameSession.Game.Outcome()),
+			Turn:    gameSession.Game.Position().Turn().Name(),
 		}
 
 		broadcastMessage, err := json.Marshal(response)
 		if err == nil {
+			log.Printf("BROADCASTING MOVE for game %s: %s", gameID, string(broadcastMessage))
 			room.forward <- broadcastMessage
 		}
 
 		sendJSONResponse(w, http.StatusOK, response)
 	}
+}
+
+func getGame(w http.ResponseWriter, r *http.Request) {
+	username, err := getUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	}
+	vars := mux.Vars(r)
+	gameID := vars["id"]
+
+	gamesMutex.RLock()
+	defer gamesMutex.RUnlock()
+
+	gameSession, ok := games[gameID]
+
+	if !ok {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+
+	playerColor := ""
+	if username == gameSession.PlayerWhite {
+		playerColor = "white"
+	} else if username == gameSession.PlayerBlack {
+		playerColor = "black"
+	}
+
+	response := map[string]interface{}{
+		"gameID":      gameID,
+		"fen":         gameSession.Game.FEN(),
+		"playerWhite": gameSession.PlayerWhite,
+		"playerBlack": gameSession.PlayerBlack,
+		"state":       gameSession.State,
+		"playerColor": playerColor,
+	}
+
+	sendJSONResponse(w, http.StatusOK, response)
+
+}
+
+func findMatch(w http.ResponseWriter, r *http.Request) {
+	username, err := getUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized: Please login to find a match", http.StatusUnauthorized)
+		return
+	}
+
+	gamesMutex.Lock()
+	defer gamesMutex.Unlock()
+
+	for gameID, session := range games {
+		if session.State == "waiting" {
+			// Found a waiting game
+			log.Printf("Match found! User %s is joining game %s created by %s", username, gameID, session.PlayerWhite)
+			session.PlayerBlack = username
+			session.State = "in_progress"
+
+			// TODO: In the future, send a WebSocket message to PlayerWhite to notify them!
+
+			response := map[string]string{
+				"gameID": gameID,
+			}
+			sendJSONResponse(w, http.StatusOK, response)
+			return
+		}
+	}
+
+	// --- 2. No waiting games found. Create a new one. ---
+	log.Printf("No waiting games found. User %s is creating a new one.", username)
+	gameID := uuid.New().String()
+	gameSession := &GameSession{
+		Game:        chess.NewGame(),
+		PlayerWhite: username,
+		PlayerBlack: "",
+		State:       "waiting",
+	}
+	games[gameID] = gameSession
+
+	log.Printf("New game created by %s with ID %s. Waiting for opponent.", username, gameID)
+
+	response := map[string]string{
+		"gameID": gameID,
+	}
+	sendJSONResponse(w, http.StatusCreated, response)
 }

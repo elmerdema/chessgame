@@ -10,11 +10,12 @@ type MoveRequest struct {
 }
 
 type MoveResponse struct {
+	GameID  string `json:"gameID"`
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
-	NewFEN  string `json:"newFEN,omitempty"`
-	Outcome string `json:"outcome,omitempty"`
-	Turn    string `json:"turn,omitempty"`
+	NewFEN  string `json:"newFEN"`
+	Outcome string `json:"outcome"`
+	Turn    string `json:"turn"`
 }
 
 func sendJSONResponse(w http.ResponseWriter, statusCode int, payload interface{}) {

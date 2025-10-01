@@ -1,4 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
+
+    fetch('http://localhost:8081/api/check-auth', { credentials: 'include' })
+    .then(response => {
+        if (response.ok) {
+            // redirect, the user is already logged in.
+            window.location.href = 'lobby.html';
+        }
+    })
+    .catch(err => {
+        console.error("Auth check failed:", err);
+    });
     const loginForm = document.getElementById('login-form');
     const registerForm = document.getElementById('register-form');
     const showRegisterLink = document.getElementById('show-register-link');

@@ -15,6 +15,8 @@ type Client struct {
 
 	// room is the room this client is chatting in.
 	room *room
+
+	GameID string
 }
 
 func (c *Client) read() {
