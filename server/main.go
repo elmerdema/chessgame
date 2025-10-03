@@ -186,7 +186,7 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: false,
 	})
 	username := r.FormValue("username")
-	user, _ := users[username]
+	user := users[username]
 	user.CSRFToken = ""
 	users[username] = user
 	fmt.Fprintln(w, "Logged out successfully!")
@@ -302,7 +302,7 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		if (isWhitesTurn && username != gameSession.PlayerWhite) ||
 			(isBlacksTurn && username != gameSession.PlayerBlack) {
 			log.Printf("Illegal move attempt in game %s by user %s. Not their turn.", gameID, username)
-			http.Error(w, "Not your turn.", http.StatusForbidden) // 403 Forbidden is appropriate here
+			http.Error(w, "Not your turn.", http.StatusForbidden)
 			return
 
 		}
@@ -311,10 +311,9 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		// The move string from JS is in coordinate notation (e.g., "e2e4", "d1h5")
 		moveStr := req.Move
 
-		// We need to find the specific move from the list of valid moves.
+		//  find the specific move from the list of valid moves.
 		var foundMove *chess.Move
 		for _, validMove := range gameSession.Game.ValidMoves() {
-			// validMove.String() formats the move in the same "e2e4" coordinate style
 			if validMove.String() == moveStr {
 				foundMove = validMove
 				break
@@ -413,7 +412,7 @@ func findMatch(w http.ResponseWriter, r *http.Request) {
 			session.PlayerBlack = username
 			session.State = "in_progress"
 
-			// TODO: In the future, send a WebSocket message to PlayerWhite to notify them!
+			// TODO: Send a WebSocket message to PlayerWhite to notify them
 
 			response := map[string]string{
 				"gameID": gameID,
@@ -423,7 +422,7 @@ func findMatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// --- 2. No waiting games found. Create a new one. ---
+	// no waiting games found, create a new one
 	log.Printf("No waiting games found. User %s is creating a new one.", username)
 	gameID := uuid.New().String()
 	gameSession := &GameSession{
