@@ -31,13 +31,29 @@ type Login struct {
 	HashedPassword string
 	SessionToken   string
 	CSRFToken      string
+	Elo            int
 }
+
+type MatchmakingRequest struct {
+	Username  string
+	Elo       int
+	Timestamp time.Time
+}
+
+var DefaultElo = 500
 
 // TODO: setup real db here in the future
 var users = map[string]Login{}
+var usersMutex = &sync.RWMutex{}
 
 var games = make(map[string]*GameSession)
 var gamesMutex = &sync.RWMutex{}
+
+var userGameMap = make(map[string]string)
+var userGameMapMutex = &sync.RWMutex{}
+
+var matchmakingQueue []MatchmakingRequest
+var matchmakingMutex = &sync.Mutex{}
 
 func main() {
 	var addr = flag.String("addr", ":8081", "The addr of the application.")
@@ -54,22 +70,22 @@ func main() {
 	api.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
 	api.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
 	api.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
+	api.HandleFunc("matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
 	room := newRoom()
 
 	api.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
 	router.Handle("/ws", room) //room is passed to handlers that need to broadcast it
 
 	go room.run()
+	go runMatchmaker()
 
 	c := cors.New(cors.Options{
-		// localhost of the frontend server
-		AllowedOrigins:   []string{"http://localhost:8080"},
+		AllowedOrigins:   []string{"http://localhost:8080"}, // frontend server, careful, if you start 2 different builds, the localhost may change
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
 	})
 
-	//CORS handler.
 	handler := c.Handler(router)
 
 	// Start the API server on port 8081 with the CORS handler
@@ -95,6 +111,9 @@ func register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Username and password must be at least 5 characters", err)
 		return
 	}
+	usersMutex.Lock()
+	defer usersMutex.Unlock()
+
 	if _, ok := users[username]; ok {
 		err := http.StatusConflict
 		http.Error(w, "User already exists", err)
@@ -103,6 +122,7 @@ func register(w http.ResponseWriter, r *http.Request) {
 	hashedPassword, _ := HashedPassword(password)
 	users[username] = Login{
 		HashedPassword: hashedPassword,
+		Elo:            DefaultElo,
 	}
 	fmt.Fprintln(w, "User registered successfully!")
 }
@@ -168,11 +188,6 @@ func protected(w http.ResponseWriter, r *http.Request) {
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
-	if err := Authorize(r); err != nil {
-		err := http.StatusUnauthorized
-		http.Error(w, "Unauthorized", err)
-		return
-	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    "",
@@ -321,7 +336,6 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		}
 
 		if foundMove != nil {
-			// We found a valid move object, apply it directly
 			moveErr = gameSession.Game.Move(foundMove)
 		} else {
 			// If we couldn't find a matching move, the move is illegal.
@@ -338,6 +352,13 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 
 		// if move was valid, the game state is updated.
 		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, gameSession.Game.FEN())
+
+		outcome := gameSession.Game.Outcome()
+		if outcome != chess.NoOutcome {
+			log.Printf("Game: %s finished with outcome: %s", gameID, outcome)
+			updateElo(gameSession.PlayerWhite, gameSession.PlayerBlack, outcome)
+			gameSession.State = "finished"
+		}
 
 		response := MoveResponse{
 			GameID:  gameID,
@@ -398,45 +419,156 @@ func getGame(w http.ResponseWriter, r *http.Request) {
 func findMatch(w http.ResponseWriter, r *http.Request) {
 	username, err := getUsernameFromSession(r)
 	if err != nil {
-		http.Error(w, "Unauthorized: Please login to find a match", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	gamesMutex.Lock()
-	defer gamesMutex.Unlock()
+	usersMutex.RLock()
+	user, ok := users[username]
+	if !ok {
+		usersMutex.RUnlock()
+		http.Error(w, "User not found", http.StatusInternalServerError)
+		return
+	}
+	userElo := user.Elo
+	usersMutex.RUnlock()
 
-	for gameID, session := range games {
-		if session.State == "waiting" {
-			// Found a waiting game
-			log.Printf("Match found! User %s is joining game %s created by %s", username, gameID, session.PlayerWhite)
-			session.PlayerBlack = username
-			session.State = "in_progress"
+	matchmakingMutex.Lock()
+	defer matchmakingMutex.Unlock()
 
-			// TODO: Send a WebSocket message to PlayerWhite to notify them
-
-			response := map[string]string{
-				"gameID": gameID,
-			}
-			sendJSONResponse(w, http.StatusOK, response)
+	// Check if user is already in the queue
+	for _, req := range matchmakingQueue {
+		if req.Username == username {
+			sendJSONResponse(w, http.StatusOK, map[string]string{"message": "You are already in the matchmaking queue."})
 			return
 		}
 	}
 
-	// no waiting games found, create a new one
-	log.Printf("No waiting games found. User %s is creating a new one.", username)
-	gameID := uuid.New().String()
-	gameSession := &GameSession{
-		Game:        chess.NewGame(),
-		PlayerWhite: username,
-		PlayerBlack: "",
-		State:       "waiting",
+	// Check if user already has an active game they were matched into
+	userGameMapMutex.RLock()
+	if _, ok := userGameMap[username]; ok {
+		userGameMapMutex.RUnlock()
+		// If they are in the map but hit find again, it's likely a UI glitch.
+		// We can just guide them to their game.
+		getMatchmakingStatus(w, r) // Reuse status logic
+		return
 	}
-	games[gameID] = gameSession
+	userGameMapMutex.RUnlock()
 
-	log.Printf("New game created by %s with ID %s. Waiting for opponent.", username, gameID)
-
-	response := map[string]string{
-		"gameID": gameID,
+	// Add user to the queue
+	log.Printf("Adding user %s (ELO: %d) to matchmaking queue.", username, userElo)
+	request := MatchmakingRequest{
+		Username:  username,
+		Elo:       userElo,
+		Timestamp: time.Now(),
 	}
-	sendJSONResponse(w, http.StatusCreated, response)
+	matchmakingQueue = append(matchmakingQueue, request)
+
+	w.WriteHeader(http.StatusAccepted) // 202 Accepted is a good status code for "request received, processing in background"
+	json.NewEncoder(w).Encode(map[string]string{"message": "Searching for a match..."})
+}
+
+// This new function runs in the background to find matches
+func runMatchmaker() {
+	for {
+		// Run every few seconds
+		time.Sleep(3 * time.Second)
+
+		matchmakingMutex.Lock()
+		if len(matchmakingQueue) < 2 {
+			matchmakingMutex.Unlock()
+			continue // Not enough players to match
+		}
+
+		var matchedIndices = make(map[int]bool)
+		var newQueue []MatchmakingRequest
+
+		// Simple O(n^2) loop to find pairs. For a small queue, this is fine.
+		for i := 0; i < len(matchmakingQueue); i++ {
+			if matchedIndices[i] {
+				continue
+			}
+			for j := i + 1; j < len(matchmakingQueue); j++ {
+				if matchedIndices[j] {
+					continue
+				}
+
+				p1 := matchmakingQueue[i]
+				p2 := matchmakingQueue[j]
+
+				// Dynamic ELO range: expands the longer you wait
+				// After 10s, range is +/- 100. After 30s, +/- 300, etc.
+				waitDuration := time.Since(p1.Timestamp).Seconds()
+				eloRange := 50 + int(waitDuration*5)
+				eloDiff := p1.Elo - p2.Elo
+				if eloDiff < 0 {
+					eloDiff = -eloDiff
+				}
+
+				if eloDiff <= eloRange {
+					// --- MATCH FOUND ---
+					log.Printf("Match found between %s (%d) and %s (%d)", p1.Username, p1.Elo, p2.Username, p2.Elo)
+
+					// Create the game
+					gamesMutex.Lock()
+					gameID := uuid.New().String()
+					gameSession := &GameSession{
+						Game:        chess.NewGame(),
+						PlayerWhite: p1.Username, // P1 is white by default
+						PlayerBlack: p2.Username,
+						State:       "in_progress",
+					}
+					games[gameID] = gameSession
+					gamesMutex.Unlock()
+
+					// Store the game ID so players can find it
+					userGameMapMutex.Lock()
+					userGameMap[p1.Username] = gameID
+					userGameMap[p2.Username] = gameID
+					userGameMapMutex.Unlock()
+
+					// Mark players as matched so they aren't processed again
+					matchedIndices[i] = true
+					matchedIndices[j] = true
+					break // Stop searching for a match for p1
+				}
+			}
+		}
+
+		// Rebuild the queue with only the unmatched players
+		for i, req := range matchmakingQueue {
+			if !matchedIndices[i] {
+				newQueue = append(newQueue, req)
+			}
+		}
+		matchmakingQueue = newQueue
+		matchmakingMutex.Unlock()
+	}
+}
+
+func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
+	username, err := getUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userGameMapMutex.RLock()
+	gameID, found := userGameMap[username]
+	userGameMapMutex.RUnlock()
+
+	if found {
+		userGameMapMutex.Lock()
+		delete(userGameMap, username)
+		userGameMapMutex.Unlock()
+
+		sendJSONResponse(w, http.StatusOK, map[string]string{
+			"status": "found",
+			"gameID": gameID,
+		})
+	} else {
+		sendJSONResponse(w, http.StatusOK, map[string]string{
+			"status": "searching",
+		})
+	}
 }

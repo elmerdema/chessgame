@@ -143,10 +143,15 @@ function drawChessboard() {
     chessboardElement.style.display = "grid";
     chessboardElement.style.gridTemplateColumns = `repeat(8, ${squareSize}px)`;
     chessboardElement.style.gridTemplateRows = `repeat(8, ${squareSize}px)`;
-
     const boardData = chessgame.get_board();
-    for (let row = 0; row < 8; row++) {
-        for (let col = 0; col < 8; col++) {
+
+    const isBlackView = myPlayerColor === 'black';
+
+    for (let visualRow = 0; visualRow < 8; visualRow++) {
+        for (let visualCol = 0; visualCol < 8; visualCol++) {
+            const row = isBlackView ? 7 - visualRow : visualRow;
+            const col = isBlackView ? 7 - visualCol : visualCol;
+
             const square = document.createElement("div");
             const pieceValue = boardData[row * 8 + col];
             let bgColor = colors[(row + col) % 2];
@@ -156,7 +161,6 @@ function drawChessboard() {
             if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
                 borderColor = "3px solid blue";
             }
-
             if (possibleMoves.some(move => move.row === row && move.col === col)) {
                 bgColor = "rgba(0, 255, 0, 0.5)";
                 cursorStyle = "pointer";
