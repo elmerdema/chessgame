@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -25,6 +26,11 @@ type GameSession struct {
 	PlayerWhite string
 	PlayerBlack string
 	State       string
+}
+
+type LeaderboardEntry struct {
+	Username string `json:"username"`
+	Elo      int    `json:"elo"`
 }
 
 type Login struct {
@@ -71,6 +77,7 @@ func main() {
 	api.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
 	api.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
 	api.HandleFunc("matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
+	api.HandleFunc("/leaderboard", getLeaderboard).Methods("GET", "OPTIONS")
 	room := newRoom()
 
 	api.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
@@ -571,4 +578,29 @@ func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
 			"status": "searching",
 		})
 	}
+}
+
+func getLeaderboard(w http.ResponseWriter, r *http.Request) {
+	_, err := getUsernameFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	usersMutex.RLock()
+	defer usersMutex.RUnlock()
+	// only return top 4 users for now
+	var leaderboard []LeaderboardEntry
+	for username, data := range users {
+		leaderboard = append(leaderboard, LeaderboardEntry{Username: username, Elo: data.Elo})
+	}
+	sort.Slice(leaderboard, func(i, j int) bool {
+		return leaderboard[i].Elo > leaderboard[j].Elo
+	})
+
+	if len(leaderboard) > 4 {
+		leaderboard = leaderboard[:4]
+	}
+
+	sendJSONResponse(w, http.StatusOK, leaderboard)
 }

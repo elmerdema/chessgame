@@ -27,7 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const findMatchButton = document.getElementById('find-match-button');
     const matchmakingStatus = document.getElementById('matchmaking-status');
     const logoutButton = document.getElementById('logout-button');
+    const leaderboard = document.getElementById('leaderboard-body');
 
+    loadLeaderboard();
     findMatchButton.addEventListener('click', async () => {
         matchmakingStatus.textContent = 'Searching for a match...';
         findMatchButton.disabled = true;
@@ -64,4 +66,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         window.location.href = '/auth.html';
     });
+
 });
+
+async function loadLeaderboard() {
+    const leaderboard = document.getElementById('leaderboard-body');
+    try {
+        const response = await fetch(`${API_BASE_URL}/leaderboard`, { credentials: 'include' });
+        if (!response.ok) {
+            throw new Error('Failed to fetch leaderboard data');
+        }
+        const leaderboardData = await response.json();
+        leaderboard.innerHTML = '';
+        leaderboardData.forEach((entry, index) => {
+            console.log(entry);
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${index + 1}</td>
+                <td>${entry.username}</td>
+                <td>${entry.elo}</td>
+            `;
+            leaderboard.appendChild(row);
+        });
+    } catch (error) {
+        console.error('Error loading leaderboard:', error);
+        leaderboard.innerHTML = '<tr><td colspan="3">Failed to load leaderboard data.</td></tr>';
+    }
+}
