@@ -26,18 +26,6 @@ const PIECES_BASE_PATH = "./pieces/";
 const promotionDialog = document.getElementById("promotion-dialog");
 
 async function initializePage() {
-    try {
-        const authResponse = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
-        if (!authResponse.ok) {
-            window.location.href = '/auth.html';
-            return;
-        }
-    } catch (error) {
-        console.error('Auth check failed:', error);
-        window.location.href = '/auth.html';
-        return;
-    }
-
     const urlParams = new URLSearchParams(window.location.search);
     currentGameID = urlParams.get('gameId');
     if (!currentGameID) {
@@ -46,37 +34,75 @@ async function initializePage() {
         return;
     }
     
+
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socketHost = window.location.host.replace(/:\d+$/, ':8081');
+    const socketHost = window.location.hostname + ':8081';
     const socketURL = `${socketProtocol}//${socketHost}/ws?gameId=${currentGameID}`;
     
-    console.log(`Attempting to connect to WebSocket at: ${socketURL}`);
+    console.log(`Attempting to connect to unified WebSocket at: ${socketURL}`);
     
     const socket = new WebSocket(socketURL);
 
     socket.onopen = () => {
-        console.log("WebSocket connection established for game:", currentGameID);
+        console.log("Unified WebSocket connection established for game and chat:", currentGameID);
+        // Enable the chat input now that the connection is open
+        document.getElementById('chat-input').disabled = false;
+        document.getElementById('chat-input').placeholder = "Type your message here...";
     };
 
     socket.onmessage = (event) => {
         const messageData = JSON.parse(event.data);
-        console.log("Received state update from server:", messageData);
+        console.log("Received data from server:", messageData);
 
-        // Update the local game state with the new FEN from the server
-        if (messageData.newFEN) {
-            chessgame.load_fen(messageData.newFEN);
-            drawChessboard();
-            checkGameEndConditions();
+        // Use a 'type' field to distinguish between message types
+        // This requires your server to send back structured JSON
+        switch (messageData.type) {
+            case 'gameStateUpdate':
+                // This is a game move or state sync from the server
+                if (messageData.payload && messageData.payload.newFEN) {
+                    chessgame.load_fen(messageData.payload.newFEN);
+                    drawChessboard();
+                    checkGameEndConditions();
+                }
+                break;
+            case 'chatMessage':
+
+                const output = document.getElementById('chat-messages');
+                const p = document.createElement('p');
+                p.textContent = messageData.payload;
+                output.appendChild(p);
+                output.scrollTop = output.scrollHeight;
+                break;
+            default:
+                console.warn("Received unknown message type:", messageData.type);
         }
     };
 
     socket.onclose = (event) => {
         console.log("WebSocket connection closed.", event.reason);
+        // Disable the chat input if the connection is lost
+        const chatInput = document.getElementById('chat-input');
+        chatInput.disabled = true;
+        chatInput.placeholder = "Connection closed.";
     };
 
     socket.onerror = (error) => {
         console.error("WebSocket error:", error);
     };
+
+    window.sendMessage = function(event) {
+        const messageInput = document.getElementById('chat-input');
+        if (event.key === 'Enter' && !messageInput.disabled && messageInput.value.trim() !== '') {
+
+            const chatPayload = {
+                type: 'chat',
+                payload: messageInput.value
+            };
+            socket.send(JSON.stringify(chatPayload));
+            messageInput.value = ''; 
+        }
+    };
+
     
     setupWasmAndListeners();
     
@@ -103,7 +129,7 @@ async function initializePage() {
 }
 
 function setupWasmAndListeners() {
-    if (chessgame) return; // Only run once
+    if (chessgame) return;
 
     chessgame = new ChessGame();
     console.log("WASM module loaded.");
@@ -265,7 +291,8 @@ async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionC
             throw new Error(moveResult.message || 'Server rejected a locally-validated move!');
         }
         
-        // The server is the source of truth. Re-sync our local board.
+        // The server is the source of truth. It will broadcast the new FEN via WebSocket.
+        // We can optionally re-sync here, but the WebSocket message is the primary mechanism.
         chessgame.load_fen(moveResult.newFEN);
         checkGameEndConditions();
 

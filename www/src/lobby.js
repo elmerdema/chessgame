@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const findMatchButton = document.getElementById('find-match-button');
     const matchmakingStatus = document.getElementById('matchmaking-status');
     const logoutButton = document.getElementById('logout-button');
-    const leaderboard = document.getElementById('leaderboard-body');
 
     loadLeaderboard();
     findMatchButton.addEventListener('click', async () => {

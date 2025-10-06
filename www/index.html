@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>Rust WASM Chess</title>
     <link rel="stylesheet" href="checkmate.css">
-    <script src="main.js"></script>
+    
 </head>
 <body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
@@ -21,7 +21,7 @@
                 <div id="chat-header">Chat</div>
                 <div id="chat-messages"></div>
                 <!-- Pass the event object to the function -->
-                <input id="chat-input" type="text" onkeydown="sendMessage(event)" placeholder="Type your message here...">
+                <input id="chat-input" type="text" onkeydown="sendMessage(event)" placeholder="Type your message here..." disabled>
         </div>
     </div>
     <!-- The Overlay (dimmer) for checkmate/stalemate -->
@@ -43,7 +43,7 @@
             <!-- Piece choices will be inserted here by JS -->
         </div>
     </div>
-
+    <script src="./main.js"></script>
     <script src="./bootstrap.js"></script>
   </body>
 </html>
