@@ -28,6 +28,4 @@ function initializeApp(username) {
     if (chatHeader) {
         chatHeader.textContent = `Chat (${username})`;
     }
-
-
 }

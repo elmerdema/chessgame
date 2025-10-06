@@ -65,13 +65,14 @@ async function initializePage() {
                     checkGameEndConditions();
                 }
                 break;
-            case 'chatMessage':
-
+            case 'chat':
                 const output = document.getElementById('chat-messages');
                 const p = document.createElement('p');
                 p.textContent = messageData.payload;
                 output.appendChild(p);
                 output.scrollTop = output.scrollHeight;
+
+
                 break;
             default:
                 console.warn("Received unknown message type:", messageData.type);
@@ -96,7 +97,8 @@ async function initializePage() {
 
             const chatPayload = {
                 type: 'chat',
-                payload: messageInput.value
+                payload: messageInput.value,
+                gameID: currentGameID
             };
             socket.send(JSON.stringify(chatPayload));
             messageInput.value = ''; 
