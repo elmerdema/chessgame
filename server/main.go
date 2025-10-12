@@ -46,6 +46,12 @@ type MatchmakingRequest struct {
 	Timestamp time.Time
 }
 
+type WebSocketMessage struct {
+	Type    string      `json:"type"`
+	Payload interface{} `json:"payload"`
+	GameID  string      `json:"gameID"`
+}
+
 var DefaultElo = 500
 
 // TODO: setup real db here in the future
@@ -70,18 +76,22 @@ func main() {
 	api := router.PathPrefix("/api").Subrouter()
 	api.HandleFunc("/login", login).Methods("POST", "OPTIONS")
 	api.HandleFunc("/register", register).Methods("POST", "OPTIONS")
-	api.HandleFunc("/logout", logout).Methods("POST", "OPTIONS")
-	api.HandleFunc("/protected", protected).Methods("POST", "OPTIONS")
-	api.HandleFunc("/check-auth", checkAuth).Methods("GET", "OPTIONS")
-	api.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
-	api.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
-	api.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
-	api.HandleFunc("matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
-	api.HandleFunc("/leaderboard", getLeaderboard).Methods("GET", "OPTIONS")
+
+	auth := api.PathPrefix("").Subrouter()
+	auth.Use(AuthMiddleware)
+
+	auth.HandleFunc("/logout", logout).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/protected", protected).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/check-auth", checkAuth).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
+	auth.HandleFunc("matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/leaderboard", getLeaderboard).Methods("GET", "OPTIONS")
 	room := newRoom()
 
-	api.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
-	router.Handle("/ws", room) //room is passed to handlers that need to broadcast it
+	auth.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
+	auth.Handle("/ws", room).Methods("GET") //room is passed to handlers that need to broadcast it
 
 	go room.run()
 	go runMatchmaker()
@@ -89,7 +99,7 @@ func main() {
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:8080"}, // frontend server, careful, if you start 2 different builds, the localhost may change
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type"},
+		AllowedHeaders:   []string{"Content-Type", "X-Requested-With"},
 		AllowCredentials: true,
 	})
 
@@ -375,7 +385,21 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 			Turn:    gameSession.Game.Position().Turn().Name(),
 		}
 
-		broadcastMessage, err := json.Marshal(response)
+		httpResponse := MoveResponse{
+			GameID:  gameID,
+			Status:  "ok",
+			NewFEN:  gameSession.Game.FEN(),
+			Outcome: string(gameSession.Game.Outcome()),
+			Turn:    gameSession.Game.Position().Turn().Name(),
+		}
+
+		wsMessage := WebSocketMessage{
+			Type:    "gameStateUpdate",
+			Payload: httpResponse, // add  original response as the payload
+			GameID:  gameID,
+		}
+
+		broadcastMessage, err := json.Marshal(wsMessage)
 		if err == nil {
 			log.Printf("BROADCASTING MOVE for game %s: %s", gameID, string(broadcastMessage))
 			room.forward <- broadcastMessage

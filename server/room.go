@@ -98,6 +98,7 @@ var upgrader = &websocket.Upgrader{ReadBufferSize: socketBufferSize, WriteBuffer
 }
 
 func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	username, _ := GetUsernameFromContext(req)
 	socket, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
 		log.Fatal("ServeHTTP:", err)
@@ -113,10 +114,11 @@ func (r *room) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 
 	client := &Client{
-		socket:  socket,
-		receive: make(chan []byte, messageBufferSize),
-		room:    r,
-		GameID:  gameID,
+		socket:   socket,
+		receive:  make(chan []byte, messageBufferSize),
+		room:     r,
+		GameID:   gameID,
+		Username: username,
 	}
 	r.join <- client
 	defer func() { r.leave <- client }()

@@ -17,6 +17,8 @@ type Client struct {
 	room *room
 
 	GameID string
+
+	Username string
 }
 
 func (c *Client) read() {

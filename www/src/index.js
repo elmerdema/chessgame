@@ -37,7 +37,7 @@ async function initializePage() {
 
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socketHost = window.location.hostname + ':8081';
-    const socketURL = `${socketProtocol}//${socketHost}/ws?gameId=${currentGameID}`;
+    const socketURL = `${socketProtocol}//${socketHost}/api/ws?gameId=${currentGameID}`;
     
     console.log(`Attempting to connect to unified WebSocket at: ${socketURL}`);
     
@@ -54,15 +54,17 @@ async function initializePage() {
         const messageData = JSON.parse(event.data);
         console.log("Received data from server:", messageData);
 
-        // Use a 'type' field to distinguish between message types
-        // This requires your server to send back structured JSON
         switch (messageData.type) {
             case 'gameStateUpdate':
-                // This is a game move or state sync from the server
+                // The game state is now inside the 'payload' property
                 if (messageData.payload && messageData.payload.newFEN) {
-                    chessgame.load_fen(messageData.payload.newFEN);
-                    drawChessboard();
-                    checkGameEndConditions();
+                    // Only update if the FEN is different to avoid redundant redraws
+                    if (chessgame.fen() !== messageData.payload.newFEN) {
+                        console.log("Applying game state update from server.");
+                        chessgame.load_fen(messageData.payload.newFEN);
+                        drawChessboard();
+                        checkGameEndConditions();
+                    }
                 }
                 break;
             case 'chat':
@@ -75,7 +77,7 @@ async function initializePage() {
 
                 break;
             default:
-                console.warn("Received unknown message type:", messageData.type);
+                console.warn("Received unknown message type:", messageData.type, messageData);
         }
     };
 
@@ -293,17 +295,19 @@ async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionC
             throw new Error(moveResult.message || 'Server rejected a locally-validated move!');
         }
         
-        // The server is the source of truth. It will broadcast the new FEN via WebSocket.
-        // We can optionally re-sync here, but the WebSocket message is the primary mechanism.
-        chessgame.load_fen(moveResult.newFEN);
-        checkGameEndConditions();
+        // The server broadcasts the new state via WebSocket, so the client who
+        // made the move will also receive it. We can remove the explicit load_fen here
+        // to rely on a single source of truth (the WebSocket broadcast).
+        // chessgame.load_fen(moveResult.newFEN);
+        // checkGameEndConditions();
 
     } catch (error) {
         console.error("Failed to sync move with server:", error);
         alert(`A critical error occurred: ${error.message}. Please refresh.`);
     } finally {
         isProcessingMove = false;
-        drawChessboard();
+        // The board will be redrawn when the WebSocket message is received.
+        // drawChessboard(); // This can also be removed to prevent a visual flicker.
     }
 }
 

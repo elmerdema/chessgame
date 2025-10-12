@@ -688,6 +688,73 @@ impl ChessGame {
         self.board[x][y] = new_piece;
         Ok(())
     }
+
+
+    #[wasm_bindgen]
+    pub fn fen(&self) -> String {
+        let mut fen_string = String::new();
+
+        // piece Piece Placement
+        for r in 0..8 {
+            let mut empty_squares = 0;
+            for c in 0..8 {
+                let piece = self.board[r][c];
+                if piece == 0 {
+                    empty_squares += 1;
+                } else {
+                    if empty_squares > 0 {
+                        fen_string.push_str(&empty_squares.to_string());
+                        empty_squares = 0;
+                    }
+                    let piece_char = match piece {
+                        W_PAWN => 'P', W_ROOK => 'R', W_KNIGHT => 'N', W_BISHOP => 'B', W_QUEEN => 'Q', W_KING => 'K',
+                        B_PAWN => 'p', B_ROOK => 'r', B_KNIGHT => 'n', B_BISHOP => 'b', B_QUEEN => 'q', B_KING => 'k',
+                        _ => '?',
+                    };
+                    fen_string.push(piece_char);
+                }
+            }
+            if empty_squares > 0 {
+                fen_string.push_str(&empty_squares.to_string());
+            }
+            if r < 7 {
+                fen_string.push('/');
+            }
+        }
+
+        //  Active Color
+        fen_string.push(' ');
+        fen_string.push(if self.current_turn == WHITE { 'w' } else { 'b' });
+
+        //  Castling Availability
+        fen_string.push(' ');
+        let mut castling_availability = String::new();
+        if self.white_can_castle_kingside { castling_availability.push('K'); }
+        if self.white_can_castle_queenside { castling_availability.push('Q'); }
+        if self.black_can_castle_kingside { castling_availability.push('k'); }
+        if self.black_can_castle_queenside { castling_availability.push('q'); }
+        if castling_availability.is_empty() {
+            fen_string.push('-');
+        } else {
+            fen_string.push_str(&castling_availability);
+        }
+
+        // En Passant Target
+        fen_string.push(' ');
+        if let Some((r, c)) = self.en_passant_target {
+            let file = (c as u8 + b'a') as char;
+            let rank = 8 - r;
+            fen_string.push(file);
+            fen_string.push_str(&rank.to_string());
+        } else {
+            fen_string.push('-');
+        }
+
+        // Halfmove Clock & 6. Fullmove Number (placeholders)
+        fen_string.push_str(" 0 1");
+
+        fen_string
+    }
     #[wasm_bindgen]
 pub fn load_fen(&mut self, fen:&str) -> Result<(), JsValue> {
     let parts: Vec<&str> = fen.split_whitespace().collect();
