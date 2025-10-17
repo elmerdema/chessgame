@@ -86,7 +86,7 @@ func main() {
 	auth.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
 	auth.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
 	auth.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
-	auth.HandleFunc("matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
 	auth.HandleFunc("/leaderboard", getLeaderboard).Methods("GET", "OPTIONS")
 	room := newRoom()
 
@@ -512,7 +512,6 @@ func runMatchmaker() {
 		var matchedIndices = make(map[int]bool)
 		var newQueue []MatchmakingRequest
 
-		// Simple O(n^2) loop to find pairs. For a small queue, this is fine.
 		for i := 0; i < len(matchmakingQueue); i++ {
 			if matchedIndices[i] {
 				continue
@@ -537,7 +536,6 @@ func runMatchmaker() {
 				if eloDiff <= eloRange {
 					log.Printf("Match found between %s (%d) and %s (%d)", p1.Username, p1.Elo, p2.Username, p2.Elo)
 
-					// Create the game
 					gamesMutex.Lock()
 					gameID := uuid.New().String()
 					gameSession := &GameSession{
@@ -586,9 +584,6 @@ func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
 	userGameMapMutex.RUnlock()
 
 	if found {
-		userGameMapMutex.Lock()
-		delete(userGameMap, username)
-		userGameMapMutex.Unlock()
 
 		sendJSONResponse(w, http.StatusOK, map[string]string{
 			"status": "found",

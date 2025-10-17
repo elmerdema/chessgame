@@ -22,6 +22,7 @@ module.exports = {
         { from:'lobby.html', to:'lobby.html' },
         { from:'src/lobby.css', to:'lobby.css' },
         { from:'src/lobby.js', to:'lobby.js' },
+        { from: 'src/loading.css', to: 'loading.css' },
       ]
     })
   ],

@@ -1,0 +1,63 @@
+#loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+
+#loading-overlay.hidden {
+    opacity: 0;
+    visibility: hidden;
+}
+
+.loading-popup {
+    background-color: #34495e;
+    padding: 2.5rem 3rem;
+    border-radius: 10px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    color: #ecf0f1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.loading-popup h3 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.spinner {
+    width: 60px;
+    height: 60px;
+    border: 5px solid #4a6572;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1.5s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#cancel-search-button {
+    margin-top: 1rem;
+    background-color: #e74c3c;
+    color: white;
+}
+
+#cancel-search-button:hover {
+    background-color: #c0392b;
+}
