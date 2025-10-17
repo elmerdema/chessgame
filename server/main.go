@@ -254,8 +254,8 @@ func checkAuth(w http.ResponseWriter, r *http.Request) {
 }
 
 func joinGame(w http.ResponseWriter, r *http.Request) {
-	username, err := getUsernameFromSession(r)
-	if err != nil {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
 		http.Error(w, "Unauthorized, please login to join a game", http.StatusUnauthorized)
 		return
 	}
@@ -300,8 +300,8 @@ func joinGame(w http.ResponseWriter, r *http.Request) {
 
 func makeMoveHandler(room *room) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username, err := getUsernameFromSession(r)
-		if err != nil {
+		username, ok := GetUsernameFromContext(r)
+		if !ok {
 			http.Error(w, "Unauthorized,", http.StatusUnauthorized)
 			return
 		}
@@ -340,7 +340,6 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		}
 
 		var moveErr error
-		// The move string from JS is in coordinate notation (e.g., "e2e4", "d1h5")
 		moveStr := req.Move
 
 		//  find the specific move from the list of valid moves.
@@ -410,8 +409,8 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 }
 
 func getGame(w http.ResponseWriter, r *http.Request) {
-	username, err := getUsernameFromSession(r)
-	if err != nil {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 	}
 	vars := mux.Vars(r)
@@ -448,8 +447,8 @@ func getGame(w http.ResponseWriter, r *http.Request) {
 }
 
 func findMatch(w http.ResponseWriter, r *http.Request) {
-	username, err := getUsernameFromSession(r)
-	if err != nil {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -499,7 +498,6 @@ func findMatch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Searching for a match..."})
 }
 
-// This new function runs in the background to find matches
 func runMatchmaker() {
 	for {
 		// Run every few seconds
@@ -537,7 +535,6 @@ func runMatchmaker() {
 				}
 
 				if eloDiff <= eloRange {
-					// --- MATCH FOUND ---
 					log.Printf("Match found between %s (%d) and %s (%d)", p1.Username, p1.Elo, p2.Username, p2.Elo)
 
 					// Create the game
@@ -578,8 +575,8 @@ func runMatchmaker() {
 }
 
 func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
-	username, err := getUsernameFromSession(r)
-	if err != nil {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -605,11 +602,6 @@ func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLeaderboard(w http.ResponseWriter, r *http.Request) {
-	_, err := getUsernameFromSession(r)
-	if err != nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
 
 	usersMutex.RLock()
 	defer usersMutex.RUnlock()

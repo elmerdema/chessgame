@@ -231,7 +231,7 @@ async function onSquareClick(event) {
         return;
     }
     
-    // Client-side turn enforcement for better UX
+    // Client-side turn enforcement 
     const currentTurnColor = chessgame.get_current_turn() === WHITE ? 'white' : 'black';
     if (myPlayerColor !== currentTurnColor) {
         return;
