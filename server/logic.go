@@ -32,24 +32,28 @@ func sendJSONResponse(w http.ResponseWriter, statusCode int, payload interface{}
 	json.NewEncoder(w).Encode(payload)
 }
 
-func calculateNewRatings(winnerElo, loserElo int) (int, int) {
-	// Probability of winning for each player
-	pWinner := 1.0 / (1.0 + float64(math.Pow(10, float64(loserElo-winnerElo)/400.0)))
-	pLoser := 1.0 - pWinner
+func calculateNewRatings(player1Elo, player2Elo int, outcome chess.Outcome) (int, int) {
+	p1 := 1.0 / (1.0 + float64(math.Pow(10, float64(player2Elo-player1Elo)/400.0)))
+	p2 := 1.0 - p1
 
-	var newWinnerElo, newLoserElo int
-	// If it's a draw, both players have a score of 0.5
-	if winnerElo == loserElo {
-		// This block is for draws, we can call it with the same ELOs
-		newWinnerElo = int(float64(winnerElo) + KFactor*(0.5-pWinner))
-		newLoserElo = int(float64(loserElo) + KFactor*(0.5-pLoser))
-	} else {
-		// For a decisive game, winner gets score 1, loser gets 0
-		newWinnerElo = int(float64(winnerElo) + KFactor*(1.0-pWinner))
-		newLoserElo = int(float64(loserElo) + KFactor*(0.0-pLoser))
+	var score1, score2 float64
+	switch outcome {
+	//  player1 is white, player2 is blakc
+	case chess.WhiteWon:
+		score1 = 1.0
+		score2 = 0.0
+	case chess.BlackWon:
+		score1 = 0.0
+		score2 = 1.0
+	case chess.Draw:
+		score1 = 0.5
+		score2 = 0.5
 	}
 
-	return newWinnerElo, newLoserElo
+	newElo1 := int(float64(player1Elo) + KFactor*(score1-p1))
+	newElo2 := int(float64(player2Elo) + KFactor*(score2-p2))
+
+	return newElo1, newElo2
 }
 
 // updateElo updates the ratings for two players after a game.
@@ -65,25 +69,15 @@ func updateElo(player1 string, player2 string, outcome chess.Outcome) {
 		return
 	}
 
-	var newElo1, newElo2 int
-	switch outcome {
-	case chess.WhiteWon:
-		// Assuming player1 is white, player2 is black. This needs to be checked.
-		// We'll pass the winner first to calculateNewRatings.
-		newElo1, newElo2 = calculateNewRatings(user1.Elo, user2.Elo)
-		log.Printf("ELO Update: %s (W) vs %s (L). %d -> %d, %d -> %d", player1, player2, user1.Elo, newElo1, user2.Elo, newElo2)
-	case chess.BlackWon:
-		// Player2 (black) won
-		newElo2, newElo1 = calculateNewRatings(user2.Elo, user1.Elo)
-		log.Printf("ELO Update: %s (L) vs %s (W). %d -> %d, %d -> %d", player1, player2, user1.Elo, newElo1, user2.Elo, newElo2)
-	case chess.Draw:
-		// For a draw, the order doesn't matter, but we'll use a special call
-		newElo1, newElo2 = calculateNewRatings(user1.Elo, user2.Elo) // Pass as if it's a draw
-		log.Printf("ELO Update (Draw): %s vs %s. %d -> %d, %d -> %d", player1, player2, user1.Elo, newElo1, user2.Elo, newElo2)
-	default:
-		// Game not over or other outcome, no ELO change
+	// No outcome means no ELO change
+	if outcome == chess.NoOutcome {
 		return
 	}
+
+	// player1 is white, player2 is black
+	newElo1, newElo2 := calculateNewRatings(user1.Elo, user2.Elo, outcome)
+
+	log.Printf("ELO Update (%s): %s vs %s. %d -> %d, %d -> %d", outcome, player1, player2, user1.Elo, newElo1, user2.Elo, newElo2)
 
 	user1.Elo = newElo1
 	user2.Elo = newElo2
