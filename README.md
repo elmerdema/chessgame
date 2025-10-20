@@ -1,3 +1,9 @@
+## TODO: 
+Add proxy for the frontend part
+Improve chat ui
+add game history
+add game settings
+
 <div align="center">
 
   <h1><code>wasm-pack-template</code></h1>

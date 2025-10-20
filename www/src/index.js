@@ -8,7 +8,7 @@ import {
 } from "./pieces.js";
 import { showPromotionDialog, hidePromotionDialog, setOnPromotionCompleted, setPromotionGameAndConstants } from "./promotion.js";
 
-const API_BASE_URL = "http://localhost:8081/api";
+const API_BASE_URL = "/api";
 let chessgame = null;
 let currentGameID = null;
 let myPlayerColor = null; // ('white' or 'black')

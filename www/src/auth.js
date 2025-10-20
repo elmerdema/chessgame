@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    fetch('http://localhost:8081/api/check-auth', { credentials: 'include' })
+    fetch('/api/check-auth', { credentials: 'include' })
     .then(response => {
         if (response.ok) {
             // redirect, the user is already logged in.
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('username', username);
         formData.append('password', password);
     
-        const response = await fetch('http://localhost:8081/api/login', {
+        const response = await fetch('/api/login', {
             method: 'POST',
             body: formData,
             credentials: 'include' // Include cookies for session management
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('username', username);
         formData.append('password', password);
     
-        const response = await fetch('http://localhost:8081/api/register', {
+        const response = await fetch('/api/register', {
             method: 'POST',
             body: formData
         });

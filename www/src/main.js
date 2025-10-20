@@ -1,6 +1,6 @@
 (async function checkAuthentication() {
     try {
-        const response = await fetch('http://localhost:8081/api/check-auth', {
+        const response = await fetch('/api/check-auth', {
             method: 'GET',
             credentials: 'include' // cookies
         });

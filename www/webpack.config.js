@@ -26,6 +26,14 @@ module.exports = {
       ]
     })
   ],
+  devServer: {
+    proxy: [
+      {
+        context: ['/api'],
+        target: 'http://localhost:8081', //proxy to backend, localhost:8080/api goes to localhost:8081/api
+      },
+    ],
+  },
   experiments: {
     asyncWebAssembly: true,
   },
