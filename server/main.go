@@ -81,7 +81,6 @@ func main() {
 	auth.Use(AuthMiddleware)
 
 	auth.HandleFunc("/logout", logout).Methods("POST", "OPTIONS")
-	auth.HandleFunc("/protected", protected).Methods("POST", "OPTIONS")
 	auth.HandleFunc("/check-auth", checkAuth).Methods("GET", "OPTIONS")
 	auth.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
 	auth.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
@@ -184,24 +183,6 @@ func login(w http.ResponseWriter, r *http.Request) {
 	user.SessionToken = sessionToken
 	users[username] = user
 	fmt.Println(w, "Login Successful")
-}
-
-func protected(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodOptions {
-		return
-	}
-	if r.Method != http.MethodPost {
-		err := http.StatusMethodNotAllowed
-		http.Error(w, "Invalid request method", err)
-		return
-	}
-	if err := Authorize(r); err != nil {
-		err := http.StatusUnauthorized
-		http.Error(w, "Unathorized, ", err)
-		return
-	}
-	username := r.FormValue("username")
-	fmt.Fprintf(w, "CSRF validation successful! Welcome %s", username)
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
@@ -401,7 +382,7 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 		broadcastMessage, err := json.Marshal(wsMessage)
 		if err == nil {
 			log.Printf("BROADCASTING MOVE for game %s: %s", gameID, string(broadcastMessage))
-			room.forward <- broadcastMessage
+			room.forward <- &Message{content: broadcastMessage}
 		}
 
 		sendJSONResponse(w, http.StatusOK, response)

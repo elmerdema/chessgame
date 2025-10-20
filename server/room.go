@@ -2,11 +2,17 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
 )
+
+type Message struct {
+	client  *Client
+	content []byte
+}
 
 type room struct {
 
@@ -20,14 +26,14 @@ type room struct {
 	leave chan *Client
 
 	// forward is a channel that holds incoming messages that should be forwarded to the other clients.
-	forward chan []byte
+	forward chan *Message
 }
 
 // newRoom create a new chat room
 
 func newRoom() *room {
 	return &room{
-		forward: make(chan []byte),
+		forward: make(chan *Message),
 		join:    make(chan *Client),
 		leave:   make(chan *Client),
 		games:   make(map[string]map[*Client]bool),
@@ -44,7 +50,7 @@ func (r *room) run() {
 			}
 			// Add the client to their specific game room
 			r.games[client.GameID][client] = true
-			log.Printf("Client joined game room %s", client.GameID)
+			log.Printf("Client %s joined game room %s", client.Username, client.GameID)
 
 		case client := <-r.leave:
 			// When a client leaves, remove them from their game room
@@ -59,26 +65,41 @@ func (r *room) run() {
 			}
 
 		case msg := <-r.forward:
-			log.Printf("ROOM RECEIVED message to forward: %s", string(msg))
-			// To broadcast, we must first find out which game this message is for.
-			// We expect the message to be JSON with a "gameID" field.
-			var moveData struct {
-				GameID string `json:"gameID"`
+			var data map[string]interface{}
+			if err := json.Unmarshal(msg.content, &data); err != nil {
+				log.Printf("Error unmarshaling message: %v", err)
+				continue
+			}
+			gameID, ok := data["gameID"].(string)
+			if !ok {
+				log.Printf("Message missing gameID: %s", string(msg.content))
+				continue
 			}
 
-			if err := json.Unmarshal(msg, &moveData); err == nil {
-				// If we successfully found a gameID, forward the message
-				// to all clients in that specific game room.
-				if gameClients, ok := r.games[moveData.GameID]; ok {
-					for client := range gameClients {
-						select {
-						case client.receive <- msg:
-							// message sent
-						default:
-							// failed to send
-							delete(r.games[moveData.GameID], client)
-							close(client.receive)
-						}
+			// If it's a chat message, add the username to the payload.
+			if msgType, ok := data["type"].(string); ok && msgType == "chat" {
+				payload, payloadOk := data["payload"].(string)
+				if payloadOk {
+					data["payload"] = fmt.Sprintf("%s: %s", msg.client.Username, payload)
+				}
+			}
+
+			broadcastMsg, err := json.Marshal(data)
+			if err != nil {
+				log.Printf("Error marshaling broadcast message: %v", err)
+				continue
+			}
+
+			// Broadcast the message to all clients in the specific game room.
+			if gameClients, ok := r.games[gameID]; ok {
+				for client := range gameClients {
+					select {
+					case client.receive <- broadcastMsg:
+						// message sent
+					default:
+						// failed to send, clean up client
+						delete(r.games[gameID], client)
+						close(client.receive)
 					}
 				}
 			}
