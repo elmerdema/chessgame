@@ -36,10 +36,8 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		//  Add username to the context for downstream handlers.
 		ctx := context.WithValue(r.Context(), userContextKey, foundUsername)
 
-		// Call the next handler in the chain, passing the new context.
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

@@ -96,7 +96,7 @@ func main() {
 	go runMatchmaker()
 
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:8080"}, // frontend server, careful, if you start 2 different builds, the localhost may change
+		AllowedOrigins:   []string{"http://localhost:8080"},
 		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "X-Requested-With"},
 		AllowCredentials: true,
@@ -179,7 +179,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: false,
 	})
 
-	//store the token in our defacto "db"
+	//store the token in our "db"
 	user.SessionToken = sessionToken
 	users[username] = user
 	fmt.Println(w, "Login Successful")
@@ -347,7 +347,6 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 			return
 		}
 
-		// if move was valid, the game state is updated.
 		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, gameSession.Game.FEN())
 
 		outcome := gameSession.Game.Outcome()
@@ -375,7 +374,7 @@ func makeMoveHandler(room *room) http.HandlerFunc {
 
 		wsMessage := WebSocketMessage{
 			Type:    "gameStateUpdate",
-			Payload: httpResponse, // add  original response as the payload
+			Payload: httpResponse,
 			GameID:  gameID,
 		}
 
@@ -447,7 +446,6 @@ func findMatch(w http.ResponseWriter, r *http.Request) {
 	matchmakingMutex.Lock()
 	defer matchmakingMutex.Unlock()
 
-	// Check if user is already in the queue
 	for _, req := range matchmakingQueue {
 		if req.Username == username {
 			sendJSONResponse(w, http.StatusOK, map[string]string{"message": "You are already in the matchmaking queue."})
@@ -459,14 +457,13 @@ func findMatch(w http.ResponseWriter, r *http.Request) {
 	userGameMapMutex.RLock()
 	if _, ok := userGameMap[username]; ok {
 		userGameMapMutex.RUnlock()
-		// If they are in the map but hit find again, it's likely a UI glitch.
+		// TODO: If they are in the map but hit find again, it's likely a UI glitch.
 		// We can just guide them to their game.
 		getMatchmakingStatus(w, r) // Reuse status logic
 		return
 	}
 	userGameMapMutex.RUnlock()
 
-	// Add user to the queue
 	log.Printf("Adding user %s (ELO: %d) to matchmaking queue.", username, userElo)
 	request := MatchmakingRequest{
 		Username:  username,

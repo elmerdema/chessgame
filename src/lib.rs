@@ -30,14 +30,13 @@ impl ChessGame {
         // Black pieces (Rank 8 -> board index 0)
         board[0] = vec![B_ROOK,B_KNIGHT, B_BISHOP, B_QUEEN, B_KING, B_BISHOP, B_KNIGHT, B_ROOK];
         // Black Pawns (Rank 7 -> board index 1)
-        board[1] = vec![B_PAWN; 8];    // B_Pawn * 8
-        board[6] = vec![ W_PAWN; 8];    // W_Pawn * 8
+        board[1] = vec![B_PAWN; 8];
+        board[6] = vec![ W_PAWN; 8];
         board[7] = vec![W_ROOK, W_KNIGHT, W_BISHOP, W_QUEEN, W_KING, W_BISHOP, W_KNIGHT, W_ROOK];
 
         ChessGame {board, current_turn: WHITE, white_can_castle_kingside: true, white_can_castle_queenside: true, black_can_castle_kingside: true, black_can_castle_queenside: true, en_passant_target: None}
     }
 
-    // Return a serialized JSON
     pub fn get_board_json(&self) -> String {
         match serde_json::to_string(&self.board) {
             Ok(json) => json,
@@ -46,12 +45,11 @@ impl ChessGame {
         }
     }
 
-    // Return a flattened 1D array which JS can handle
+    // Rreturn a flattened 1D array which JS can handle
     pub fn get_board(&self) -> Vec<i32> {
         self.board.iter().flat_map(|row| row.iter().cloned()).collect()
     }
 
-    //  Return board dimensions separately
     pub fn get_board_width(&self) -> usize {
         // Assumes a square board or at least one row if not empty
         self.board.get(0).map_or(0, |row| row.len())
@@ -61,11 +59,10 @@ impl ChessGame {
         self.board.len()
     }
 
-    // Get a specific piece using usize for indexing internally
     pub fn get_piece(&self, x: usize, y: usize) -> i32 {
         // Check bounds using usize which cannot be negative
         if x >= self.get_board_height() || y >= self.get_board_width() {
-            return 0; // Or handle as an error/Option<i32>
+            return 0;
         }
         self.board[x][y]
     }
@@ -118,7 +115,7 @@ impl ChessGame {
                 utils::is_valid_rook_move(start_x, start_y, end_x, end_y) &&
                 self.is_path_clear(start_x, start_y, end_x, end_y)
             },
-            3 => utils::is_valid_knight_move(start_x, start_y, end_x, end_y), // Jumps over pieces
+            3 => utils::is_valid_knight_move(start_x, start_y, end_x, end_y),
             4 => {
                 utils::is_valid_bishop_move(start_x, start_y, end_x, end_y) &&
                 self.is_path_clear(start_x, start_y, end_x, end_y)
@@ -136,24 +133,21 @@ impl ChessGame {
         }
 
         // 6. Check if Move Puts Own King in Check (Simulation)
-        // Create a temporary copy of the game state
         let mut temp_game = self.clone();
 
-        // Call the internal helper to simulate the move. It won't update state or turn.
+        //  simulate the move, It won't update state or turn.
         if let Err(_) = temp_game.make_move_internal(start_x, start_y, end_x, end_y, true) {
-            // This should ideally not happen if is_basic_move_valid is true, but for safety
+            // this should ideally not happen if is_basic_move_valid is true, but just to be sure
             return false; 
         }
 
-        // Now, check if the king of the player who moved is in check in the temp state
         if temp_game.is_check(piece_color) {
             utils::log("Move failed: leaves king in check");
-            return false; // Move is invalid because it leaves the king in check
+            return false; // Move is invalid, the king in check
         }
         true
     }
 
-    // Helper to determine if a move coordinates constitute an en passant capture
     fn is_en_passant_move(&self, start_x: i32, start_y: i32, end_x: i32, end_y: i32) -> bool {
         if let Some(target_square) = self.en_passant_target {
             let piece = self.get_piece(start_x as usize, start_y as usize);
@@ -165,8 +159,6 @@ impl ChessGame {
             false
         }
     }
-
-    // Extracted detailed pawn move logic for clarity
     fn is_valid_pawn_move_detailed(&self, start_x: i32, start_y: i32, end_x: i32, end_y: i32, piece_color: i32, ending_piece: i32, ending_piece_color: i32) -> bool {
         let is_white = piece_color == WHITE;
         let dx = end_x - start_x;
@@ -212,12 +204,10 @@ impl ChessGame {
                 return false; 
             }
 
-            // Standard Capture
             if ending_piece != 0 && ending_piece_color != piece_color {
                 utils::log("Valid pawn capture");
                 return true;
             }
-            // En Passant Capture
             if ending_piece == 0 && self.is_en_passant_move(start_x, start_y, end_x, end_y) {
                 utils::log("Valid en passant");
                 return true;
@@ -240,7 +230,6 @@ impl ChessGame {
             return true;
         }
 
-        // --- Castling ---
         // Must be moving exactly 2 squares horizontally, and no vertical movement
         if dx == 0 && dy.abs() == 2 {
             // Cannot castle if currently in check
@@ -263,7 +252,7 @@ impl ChessGame {
                    self.is_square_attacked(start_x, start_y + 2, opponent_color)    // g1/g8
                 { return false; }
 
-                return true; // Valid Kingside Castle attempt
+                return true;
             }
             // Queenside Castling (O-O-O)
             else { // e.g., e1 -> c1 (y=4 -> y=2) or e8 -> c8 (y=4 -> y=2)
@@ -348,7 +337,7 @@ impl ChessGame {
     }
     fn is_square_attacked(&self, target_x: i32, target_y: i32, attacker_color: i32) -> bool {
         if !Self::is_on_board(target_x, target_y) {
-            return false; // Should not happen if called correctly
+            return false; // theoricallyshould not happen if called correctly
         }
 
         for r in 0..8 {
@@ -371,20 +360,17 @@ impl ChessGame {
         if !Self::is_on_board(start_x, start_y) || !Self::is_on_board(end_x, end_y) { return false; }
         if start_x == end_x && start_y == end_y { return false; }
 
-        // 2. Get Piece Info
         let piece = self.get_piece(start_x as usize, start_y as usize);
         if piece == 0 { return false; }
         let piece_color = utils::get_piece_color(piece);
         let piece_type = utils::get_piece_type(piece);
 
-        // 3. Get Destination Info
         let ending_piece = self.get_piece(end_x as usize, end_y as usize);
         let ending_piece_color = utils::get_piece_color(ending_piece);
 
-        // 4. Check Target Square (Cannot capture friendly piece)
+        // (Cannot capture friendly piece)
         if ending_piece != 0 && ending_piece_color == piece_color { return false; }
 
-        // 5. Validate Move Shape & Obstructions
         match piece_type {
             1 => { // Pawn
                 let is_white_attacker = piece_color == WHITE;
@@ -398,22 +384,22 @@ impl ChessGame {
                 //If not a one-step diagonal move, the pawn is not attacking this square.
                 return false;
             },
-            2 => { // Rook
+            2 => {
                 if !utils::is_valid_rook_move(start_x, start_y, end_x, end_y) { return false; }
                 self.is_path_clear(start_x, start_y, end_x, end_y)
             },
-            3 => { // Knight
+            3 => {
                 utils::is_valid_knight_move(start_x, start_y, end_x, end_y)
             },
-            4 => { // Bishop
+            4 => {
                 if !utils::is_valid_bishop_move(start_x, start_y, end_x, end_y) { return false; }
                  self.is_path_clear(start_x, start_y, end_x, end_y)
             },
-            5 => { // Queen
+            5 => {
                 if !utils::is_valid_queen_move(start_x, start_y, end_x, end_y) { return false; }
                  self.is_path_clear(start_x, start_y, end_x, end_y)
             },
-            6 => { // King
+            6 => {
                 // For attack checks, we only care about the one-square move shape.
                 // Castling is handled separately in the main is_valid_move.
                 utils::is_valid_king_move(start_x, start_y, end_x, end_y)
@@ -430,12 +416,10 @@ impl ChessGame {
 
         // Get piece info *before* the move, for validation and then for promotion check
         let piece_at_start = self.get_piece(start_x, start_y);
-        let piece_type_at_start = utils::get_piece_type(piece_at_start);
+        // let piece_type_at_start = utils::get_piece_type(piece_at_start);
         let piece_color_at_start = utils::get_piece_color(piece_at_start);
 
         if !self.is_valid_move(sx, sy, ex, ey) {
-            // Error handling remains similar, but the "leaves king in check" is now handled
-            // by `is_valid_move` returning false directly.
             let error_msg = if piece_at_start == 0 {
                 "No piece at starting square.".to_string()
             } else if piece_color_at_start != self.current_turn {
@@ -451,7 +435,7 @@ impl ChessGame {
             .map_err(|e| JsValue::from_str(&format!("Internal move error: {}", e)))?;
 
         // After `make_move_internal` completes, the piece is at `end_x, end_y`.
-        // Check for promotion *after* the move has been applied to the board.
+        // Check for promotion after the move has been applied to the board.
         let promotion_coords: Option<Vec<usize>> = {
             let moved_piece = self.get_piece(end_x, end_y);
             let moved_piece_type = utils::get_piece_type(moved_piece);
