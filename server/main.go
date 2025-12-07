@@ -56,6 +56,7 @@ var DefaultElo = 500
 
 // TODO: setup real db here in the future
 var users = map[string]Login{}
+
 var usersMutex = &sync.RWMutex{}
 
 var games = make(map[string]*GameSession)
