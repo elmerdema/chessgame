@@ -25,7 +25,6 @@ add game settings
 
 ## About
 
-[**📚 Read this template tutorial! 📚**][template-docs]
 
 This template is designed for compiling Rust libraries into WebAssembly and
 publishing the resulting package to NPM.
@@ -36,9 +35,8 @@ templates and usages of `wasm-pack`.
 [tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
 [template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
 
-## 🚴 Usage
 
-### 🐑 Use `cargo generate` to Clone this Template
+###  Use `cargo generate` to Clone this Template
 
 [Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
 
@@ -47,25 +45,15 @@ cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name m
 cd my-project
 ```
 
-### 🛠️ Build with `wasm-pack build`
+###  Build with `wasm-pack build`
 
 ```
 wasm-pack build
 ```
 
-### 🔬 Test in Headless Browsers with `wasm-pack test`
 
-```
-wasm-pack test --headless --firefox
-```
 
-### 🎁 Publish to NPM with `wasm-pack publish`
-
-```
-wasm-pack publish
-```
-
-## 🔋 Batteries Included
+##  Batteries Included
 
 * [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
   between WebAssembly and JavaScript.
@@ -91,9 +79,19 @@ conditions.
 
 ## Running the Project
 
+## Database Setup
+
+Before running the backend server, you need to set up PostgreSQL:
+
+1. **Install PostgreSQL** if you haven't already.
+2. **Create a `.env` file** in the root directory based on [`.env.example`](.env.example) and set your `DATABASE_PASSWORD` to match your PostgreSQL password.
+3. **Create the database**: Connect to PostgreSQL using `psql` and run:
+   ```sql
+   CREATE DATABASE chessgame;
+
 1.  **Start the Backend Server:**
-    -   Navigate to the `server` directory: `cd server`
-    -   Run the server: `go run .`
+    - 
+    -   Run the server: `go run .\server`
     -   The server will start on `http://localhost:8081`.
 
 2.  **Start the Frontend Development Server:**
@@ -102,6 +100,7 @@ conditions.
     -   Install dependencies: `npm install`
     -   Start the webpack development server: `npm start`
     -   The frontend will be available at `http://localhost:8080`.
+
 
 3.  **Access the Application:**
     -   Open your web browser and go to `http://localhost:8080/auth.html` to log in or register.

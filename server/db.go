@@ -6,21 +6,32 @@ import (
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 var (
-	host     = "localhost"
-	port     = 5432
-	user     = "postgres"
-	password = os.Getenv("DATABASE_PASSWORD")
+	host = "localhost"
+	port = 5432
+	user = "postgres"
 )
 
-var psqlInfo = fmt.Sprintf("host=%s port=%d user=%s password=%s sslmode=disable", host, port, user, password)
+var psqlInfo string
 
 func InitDB() (*sql.DB, error) {
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error while loading .env file", err)
+	}
+	password := os.Getenv("DATABASE_PASSWORD")
+	psqlInfo = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=chessgame sslmode=disable", host, port, user, password)
+	schema, err := os.ReadFile("server/schemas/schema.sql")
+
+	if err != nil {
+		log.Fatal("Error when reading schema.sql", err)
+	}
 
 	db, err := sql.Open("postgres", psqlInfo)
+
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +42,13 @@ func InitDB() (*sql.DB, error) {
 	}
 
 	log.Println("Successfully connected to the database")
+
+	_, err = db.Exec(string(schema))
+
+	if err != nil {
+		log.Fatal("Error when querying the DB", err)
+	}
+
 	return db, nil
 }
 

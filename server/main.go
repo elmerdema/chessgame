@@ -1,6 +1,6 @@
 package main
 
-//go run .
+//go run .\server
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081/api/register"
 // curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081//apilogin"
 //curl -X POST "http://localhost:8081/api/game/new"
@@ -69,6 +69,17 @@ var matchmakingQueue []MatchmakingRequest
 var matchmakingMutex = &sync.Mutex{}
 
 func main() {
+
+	db, err := InitDB()
+	if err != nil {
+		log.Fatal("Failed to connect to database", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatal("Failed to ping the database", err)
+	}
+
 	var addr = flag.String("addr", ":8081", "The addr of the application.")
 	flag.Parse()
 
