@@ -1,27 +1,28 @@
 package main
 
-//go run .\server
-// curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081/api/register"
-// curl -X POST -d "username=testuser&password=testpass" "http://localhost:8081//apilogin"
-//curl -X POST "http://localhost:8081/api/game/new"
-// curl -X POST -H "Content-Type: application/json" -d "{\"move\": \"e2e4\"}" "http://localhost:8081/api/game/YOUR_GAME_ID_HERE/move"
 import (
+	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
-	"sort"
 	"sync"
 	"time"
 
 	"github.com/corentings/chess"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"github.com/lib/pq"
 	"github.com/rs/cors"
 )
 
-type GameSession struct {
+type Server struct {
+	db *sql.DB
+}
+
+type GameSession struct { // Used for API responses
 	Game        *chess.Game
 	PlayerWhite string
 	PlayerBlack string
@@ -54,22 +55,11 @@ type WebSocketMessage struct {
 
 var DefaultElo = 500
 
-// TODO: setup real db here in the future
-var users = map[string]Login{}
-
-var usersMutex = &sync.RWMutex{}
-
-var games = make(map[string]*GameSession)
-var gamesMutex = &sync.RWMutex{}
-
-var userGameMap = make(map[string]string)
-var userGameMapMutex = &sync.RWMutex{}
-
+// in memory
 var matchmakingQueue []MatchmakingRequest
 var matchmakingMutex = &sync.Mutex{}
 
 func main() {
-
 	db, err := InitDB()
 	if err != nil {
 		log.Fatal("Failed to connect to database", err)
@@ -80,32 +70,34 @@ func main() {
 		log.Fatal("Failed to ping the database", err)
 	}
 
+	srv := &Server{db: db}
+
 	var addr = flag.String("addr", ":8081", "The addr of the application.")
 	flag.Parse()
 
 	router := mux.NewRouter()
 
 	api := router.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/login", login).Methods("POST", "OPTIONS")
-	api.HandleFunc("/register", register).Methods("POST", "OPTIONS")
+	api.HandleFunc("/login", srv.login).Methods("POST", "OPTIONS")
+	api.HandleFunc("/register", srv.register).Methods("POST", "OPTIONS")
 
 	auth := api.PathPrefix("").Subrouter()
-	auth.Use(AuthMiddleware)
+	auth.Use(srv.AuthMiddleware)
 
-	auth.HandleFunc("/logout", logout).Methods("POST", "OPTIONS")
-	auth.HandleFunc("/check-auth", checkAuth).Methods("GET", "OPTIONS")
-	auth.HandleFunc("/game/{id}/join", joinGame).Methods("POST", "OPTIONS")
-	auth.HandleFunc("/game/{id}", getGame).Methods("GET", "OPTIONS")
-	auth.HandleFunc("/matchmaking/find", findMatch).Methods("POST", "OPTIONS")
-	auth.HandleFunc("/matchmaking/status", getMatchmakingStatus).Methods("GET", "OPTIONS")
-	auth.HandleFunc("/leaderboard", getLeaderboard).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/logout", srv.logout).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/check-auth", srv.checkAuth).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/game/{id}/join", srv.joinGame).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/game/{id}", srv.getGame).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/matchmaking/find", srv.findMatch).Methods("POST", "OPTIONS")
+	auth.HandleFunc("/matchmaking/status", srv.getMatchmakingStatus).Methods("GET", "OPTIONS")
+	auth.HandleFunc("/leaderboard", srv.getLeaderboard).Methods("GET", "OPTIONS")
+
 	room := newRoom()
-
-	auth.HandleFunc("/game/{id}/move", makeMoveHandler(room)).Methods("POST", "OPTIONS")
-	auth.Handle("/ws", room).Methods("GET") //room is passed to handlers that need to broadcast it
+	auth.HandleFunc("/game/{id}/move", srv.makeMoveHandler(room)).Methods("POST", "OPTIONS")
+	auth.Handle("/ws", room).Methods("GET")
 
 	go room.run()
-	go runMatchmaker()
+	go runMatchmaker(srv) // Pass server to matchmaker to access DB
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:8080"},
@@ -114,69 +106,79 @@ func main() {
 		AllowCredentials: true,
 	})
 
-	handler := c.Handler(router)
-
-	// Start the API server on port 8081 with the CORS handler
 	log.Println("Starting API server on", *addr)
-	if err := http.ListenAndServe(*addr, handler); err != nil {
+	if err := http.ListenAndServe(*addr, c.Handler(router)); err != nil {
 		log.Fatal("ListenAndServe:", err)
 	}
 }
 
-func register(w http.ResponseWriter, r *http.Request) {
+func (s *Server) register(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
-	if r.Method != http.MethodPost {
-		err := http.StatusMethodNotAllowed
-		http.Error(w, "Invalid method", err)
-		return
-	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
-	if len(username) < 5 || len(password) < 5 {
-		err := http.StatusBadRequest
-		http.Error(w, "Username and password must be at least 5 characters", err)
-		return
-	}
-	usersMutex.Lock()
-	defer usersMutex.Unlock()
 
-	if _, ok := users[username]; ok {
-		err := http.StatusConflict
-		http.Error(w, "User already exists", err)
+	if len(username) < 5 || len(password) < 5 {
+		http.Error(w, "Username and password must be at least 5 characters", http.StatusBadRequest)
 		return
 	}
-	hashedPassword, _ := HashedPassword(password)
-	users[username] = Login{
-		HashedPassword: hashedPassword,
-		Elo:            DefaultElo,
+
+	hashedPassword, err := HashedPassword(password)
+	if err != nil {
+		http.Error(w, "Error hashing password", http.StatusInternalServerError)
+		return
 	}
+
+	_, err = s.db.Exec(
+		"INSERT INTO users (username, password_hash, elo) VALUES ($1, $2, $3)",
+		username, hashedPassword, DefaultElo,
+	)
+
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			http.Error(w, "User already exists", http.StatusConflict)
+			return
+		}
+		log.Println("DB Register Error:", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
 	fmt.Fprintln(w, "User registered successfully!")
 }
 
-func login(w http.ResponseWriter, r *http.Request) {
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		return
 	}
-	if r.Method != http.MethodPost {
-		err := http.StatusMethodNotAllowed
-		http.Error(w, "Invalid request method", err)
-		return
-	}
+
 	username := r.FormValue("username")
 	password := r.FormValue("password")
 
-	user, ok := users[username]
-	if !ok || !CheckPasswordHash(password, user.HashedPassword) {
-		err := http.StatusUnauthorized
-		http.Error(w, "Invalid username or password", err)
+	var storedHash string
+	err := s.db.QueryRow("SELECT password_hash FROM users WHERE username=$1", username).Scan(&storedHash)
+
+	if err == sql.ErrNoRows || !CheckPasswordHash(password, storedHash) {
+		http.Error(w, "Invalid username or password", http.StatusUnauthorized)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
 		return
 	}
 
 	sessionToken := generateToken(32)
 	csrfToken := generateToken(32)
-	//session cookie
+
+	_, err = s.db.Exec("UPDATE users SET session_token=$1, csrf_token=$2 WHERE username=$3",
+		sessionToken, csrfToken, username)
+
+	if err != nil {
+		http.Error(w, "Failed to create session", http.StatusInternalServerError)
+		return
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    sessionToken,
@@ -191,13 +193,15 @@ func login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: false,
 	})
 
-	//store the token in our "db"
-	user.SessionToken = sessionToken
-	users[username] = user
-	fmt.Println(w, "Login Successful")
+	fmt.Fprintln(w, "Login Successful")
 }
 
-func logout(w http.ResponseWriter, r *http.Request) {
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	username, ok := GetUsernameFromContext(r)
+	if ok {
+		s.db.Exec("UPDATE users SET session_token=NULL, csrf_token=NULL WHERE username=$1", username)
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
 		Value:    "",
@@ -210,293 +214,273 @@ func logout(w http.ResponseWriter, r *http.Request) {
 		Expires:  time.Now().Add(-time.Hour),
 		HttpOnly: false,
 	})
-	username := r.FormValue("username")
-	user := users[username]
-	user.CSRFToken = ""
-	users[username] = user
+
 	fmt.Fprintln(w, "Logged out successfully!")
 }
 
-func checkAuth(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Invalid Method, expected GET request", http.StatusMethodNotAllowed)
-		return
-	}
-	sessionCookie, err := r.Cookie("session_token")
-	if err != nil {
-		http.Error(w, "Unathorized", http.StatusUnauthorized)
-		return
-	}
-	sessionToken := sessionCookie.Value
-	var foundUsername string
-	for username, loginData := range users {
-		if loginData.SessionToken == sessionToken {
-			foundUsername = username
-			break
-		}
-	}
-	if foundUsername == "" {
-		http.Error(w, "Unathorized", http.StatusUnauthorized)
-		return
-	}
-
-	//user is authenticated
-	w.Header().Set("Content-Type", "application/json")
-
-	fmt.Fprintf(w, `{"isLoggedIn": true, "username": "%s"}`, foundUsername)
-}
-
-func joinGame(w http.ResponseWriter, r *http.Request) {
+func (s *Server) checkAuth(w http.ResponseWriter, r *http.Request) {
 	username, ok := GetUsernameFromContext(r)
 	if !ok {
-		http.Error(w, "Unauthorized, please login to join a game", http.StatusUnauthorized)
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, `{"isLoggedIn": true, "username": "%s"}`, username)
+}
+
+func (s *Server) joinGame(w http.ResponseWriter, r *http.Request) {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	vars := mux.Vars(r)
 	gameID := vars["id"]
 
-	gamesMutex.Lock()
-	defer gamesMutex.Unlock()
+	var state, playerWhite, fen string
+	err := s.db.QueryRow("SELECT state, player_white, fen FROM games WHERE id=$1", gameID).
+		Scan(&state, &playerWhite, &fen)
 
-	gameSession, ok := games[gameID]
-	if !ok {
+	if err == sql.ErrNoRows {
 		http.Error(w, "Game not found", http.StatusNotFound)
 		return
 	}
-	if gameSession.State != "waiting" {
+
+	if state != "waiting" {
 		http.Error(w, "Game is not available to join", http.StatusConflict)
 		return
 	}
 
-	if gameSession.State == username {
+	if playerWhite == username {
 		http.Error(w, "You cannot join your own game.", http.StatusBadRequest)
 		return
 	}
 
-	gameSession.PlayerBlack = username
-	gameSession.State = "in_progress"
-	games[gameID] = gameSession
+	_, err = s.db.Exec("UPDATE games SET player_black=$1, state='in_progress', updated_at=NOW() WHERE id=$2",
+		username, gameID)
 
-	log.Printf("User %s joined game %s as Black. Game is now in progress", username, gameID)
+	if err != nil {
+		http.Error(w, "Failed to join game", http.StatusInternalServerError)
+		return
+	}
 
-	// TODO: Use the WebSocket to notify PlayerWhite that the game has started!
-	// room.forward <- ... some message ...
+	log.Printf("User %s joined game %s as Black.", username, gameID)
 
 	response := map[string]string{
 		"gameID": gameID,
-		"fen":    gameSession.Game.FEN(),
+		"fen":    fen,
 		"color":  "black",
 	}
 	sendJSONResponse(w, http.StatusOK, response)
-
 }
 
-func makeMoveHandler(room *room) http.HandlerFunc {
+func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
+	username, ok := GetUsernameFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	vars := mux.Vars(r)
+	gameID := vars["id"]
+
+	var fen, white, black, state string
+	// Handle NULL black player using sql.NullString or COALESCE
+	err := s.db.QueryRow("SELECT fen, player_white, COALESCE(player_black, ''), state FROM games WHERE id=$1", gameID).
+		Scan(&fen, &white, &black, &state)
+
+	if err == sql.ErrNoRows {
+		http.Error(w, "Game not found", http.StatusNotFound)
+		return
+	}
+
+	playerColor := ""
+	if username == white {
+		playerColor = "white"
+	} else if username == black {
+		playerColor = "black"
+	}
+
+	response := map[string]interface{}{
+		"gameID":      gameID,
+		"fen":         fen,
+		"playerWhite": white,
+		"playerBlack": black,
+		"state":       state,
+		"playerColor": playerColor,
+	}
+	sendJSONResponse(w, http.StatusOK, response)
+}
+
+func (s *Server) makeMoveHandler(room *room) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, ok := GetUsernameFromContext(r)
 		if !ok {
-			http.Error(w, "Unauthorized,", http.StatusUnauthorized)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		vars := mux.Vars(r)
 		gameID, ok := vars["id"]
-		if !ok {
-			http.Error(w, "Game ID is missing", http.StatusBadRequest)
-			return
-		}
 
 		var req MoveRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			http.Error(w, "Invalid request", http.StatusBadRequest)
 			return
 		}
 
-		gamesMutex.Lock()
-		defer gamesMutex.Unlock()
+		var fen, playerWhite, playerBlack, dbState string
+		err := s.db.QueryRow(`SELECT fen, player_white, player_black, state FROM games WHERE id = $1`, gameID).
+			Scan(&fen, &playerWhite, &playerBlack, &dbState)
 
-		gameSession, ok := games[gameID]
-		if !ok {
+		if err != nil {
 			http.Error(w, "Game not found", http.StatusNotFound)
 			return
 		}
 
-		turn := gameSession.Game.Position().Turn()
-		isWhitesTurn := turn == chess.White
-		isBlacksTurn := turn == chess.Black
-
-		if (isWhitesTurn && username != gameSession.PlayerWhite) ||
-			(isBlacksTurn && username != gameSession.PlayerBlack) {
-			log.Printf("Illegal move attempt in game %s by user %s. Not their turn.", gameID, username)
-			http.Error(w, "Not your turn.", http.StatusForbidden)
+		if dbState != "in_progress" {
+			http.Error(w, "Game is not in progress", http.StatusBadRequest)
 			return
-
 		}
 
-		var moveErr error
-		moveStr := req.Move
+		fenFunc, err := chess.FEN(fen)
+		if err != nil {
+			http.Error(w, "Invalid FEN in database", http.StatusInternalServerError)
+			return
+		}
+		game := chess.NewGame(fenFunc)
 
-		//  find the specific move from the list of valid moves.
+		// Check turn
+		turn := game.Position().Turn()
+		if (turn == chess.White && username != playerWhite) || (turn == chess.Black && username != playerBlack) {
+			http.Error(w, "Not your turn", http.StatusForbidden)
+			return
+		}
+
+		// Validate Move
+		moveStr := req.Move
 		var foundMove *chess.Move
-		for _, validMove := range gameSession.Game.ValidMoves() {
+		for _, validMove := range game.ValidMoves() {
 			if validMove.String() == moveStr {
 				foundMove = validMove
 				break
 			}
 		}
 
-		if foundMove != nil {
-			moveErr = gameSession.Game.Move(foundMove)
-		} else {
-			// If we couldn't find a matching move, the move is illegal.
-			moveErr = fmt.Errorf("illegal move %s", moveStr)
-		}
-
-		if moveErr != nil {
-			sendJSONResponse(w, http.StatusBadRequest, MoveResponse{
-				Status:  "error",
-				Message: fmt.Sprintf("Illegal move: %s", moveErr.Error()),
-			})
+		if foundMove == nil {
+			sendJSONResponse(w, http.StatusBadRequest, MoveResponse{Status: "error", Message: "Illegal move"})
 			return
 		}
 
-		log.Printf("Game %s: Valid move %s. New FEN: %s", gameID, req.Move, gameSession.Game.FEN())
+		if err := game.Move(foundMove); err != nil {
+			http.Error(w, "Error applying move", http.StatusInternalServerError)
+			return
+		}
 
-		outcome := gameSession.Game.Outcome()
+		outcome := game.Outcome()
+		newFen := game.FEN()
+		newState := "in_progress"
+		var winner *string = nil
+
 		if outcome != chess.NoOutcome {
-			log.Printf("Game: %s finished with outcome: %s", gameID, outcome)
-			updateElo(gameSession.PlayerWhite, gameSession.PlayerBlack, outcome)
-			gameSession.State = "finished"
-		}
+			newState = "finished"
+			UpdateEloInDB(playerWhite, playerBlack, outcome, s.db)
 
-		response := MoveResponse{
-			GameID:  gameID,
-			Status:  "ok",
-			NewFEN:  gameSession.Game.FEN(),
-			Outcome: string(gameSession.Game.Outcome()),
-			Turn:    gameSession.Game.Position().Turn().Name(),
-		}
+			wStr := ""
+			if outcome == chess.WhiteWon {
+				wStr = "white"
+			} else if outcome == chess.BlackWon {
+				wStr = "black"
+			} else {
+				wStr = "draw"
+			}
+			winner = &wStr
 
-		httpResponse := MoveResponse{
-			GameID:  gameID,
-			Status:  "ok",
-			NewFEN:  gameSession.Game.FEN(),
-			Outcome: string(gameSession.Game.Outcome()),
-			Turn:    gameSession.Game.Position().Turn().Name(),
-		}
+			_, err = s.db.Exec(`UPDATE games SET fen = $1, state = $2, winner = $3, updated_at = NOW() WHERE id = $4`,
+				newFen, newState, winner, gameID)
 
-		wsMessage := WebSocketMessage{
-			Type:    "gameStateUpdate",
-			Payload: httpResponse,
-			GameID:  gameID,
-		}
+			if err != nil {
+				http.Error(w, "Failed to save game", http.StatusInternalServerError)
+				return
+			}
 
-		broadcastMessage, err := json.Marshal(wsMessage)
-		if err == nil {
-			log.Printf("BROADCASTING MOVE for game %s: %s", gameID, string(broadcastMessage))
-			room.forward <- &Message{content: broadcastMessage}
-		}
+			response := MoveResponse{
+				GameID:  gameID,
+				Status:  "ok",
+				NewFEN:  newFen,
+				Outcome: string(outcome),
+				Turn:    game.Position().Turn().Name(),
+			}
 
-		sendJSONResponse(w, http.StatusOK, response)
+			wsMessage := WebSocketMessage{
+				Type:    "gameStateUpdate",
+				Payload: response,
+				GameID:  gameID,
+			}
+
+			bytes, _ := json.Marshal(wsMessage)
+			room.forward <- &Message{content: bytes}
+			sendJSONResponse(w, http.StatusOK, response)
+		}
 	}
 }
 
-func getGame(w http.ResponseWriter, r *http.Request) {
-	username, ok := GetUsernameFromContext(r)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	}
-	vars := mux.Vars(r)
-	gameID := vars["id"]
+// --- Matchmaking & Leaderboard ---
 
-	gamesMutex.RLock()
-	defer gamesMutex.RUnlock()
-
-	gameSession, ok := games[gameID]
-
-	if !ok {
-		http.Error(w, "Game not found", http.StatusNotFound)
-		return
-	}
-
-	playerColor := ""
-	if username == gameSession.PlayerWhite {
-		playerColor = "white"
-	} else if username == gameSession.PlayerBlack {
-		playerColor = "black"
-	}
-
-	response := map[string]interface{}{
-		"gameID":      gameID,
-		"fen":         gameSession.Game.FEN(),
-		"playerWhite": gameSession.PlayerWhite,
-		"playerBlack": gameSession.PlayerBlack,
-		"state":       gameSession.State,
-		"playerColor": playerColor,
-	}
-
-	sendJSONResponse(w, http.StatusOK, response)
-
-}
-
-func findMatch(w http.ResponseWriter, r *http.Request) {
+func (s *Server) findMatch(w http.ResponseWriter, r *http.Request) {
 	username, ok := GetUsernameFromContext(r)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	usersMutex.RLock()
-	user, ok := users[username]
-	if !ok {
-		usersMutex.RUnlock()
+	var userElo int
+	err := s.db.QueryRow("SELECT elo FROM users WHERE username=$1", username).Scan(&userElo)
+	if err != nil {
 		http.Error(w, "User not found", http.StatusInternalServerError)
 		return
 	}
-	userElo := user.Elo
-	usersMutex.RUnlock()
 
+	// Check Queue
 	matchmakingMutex.Lock()
-	defer matchmakingMutex.Unlock()
-
 	for _, req := range matchmakingQueue {
 		if req.Username == username {
-			sendJSONResponse(w, http.StatusOK, map[string]string{"message": "You are already in the matchmaking queue."})
+			matchmakingMutex.Unlock()
+			sendJSONResponse(w, http.StatusOK, map[string]string{"message": "Already in queue"})
 			return
 		}
 	}
+	matchmakingMutex.Unlock()
 
-	// Check if user already has an active game they were matched into
-	userGameMapMutex.RLock()
-	if _, ok := userGameMap[username]; ok {
-		userGameMapMutex.RUnlock()
-		// TODO: If they are in the map but hit find again, it's likely a UI glitch.
-		// We can just guide them to their game.
-		getMatchmakingStatus(w, r) // Reuse status logic
+	// Check Active Games in DB
+	var existingGameID string
+	err = s.db.QueryRow("SELECT id FROM games WHERE (player_white=$1 OR player_black=$1) AND state='in_progress'", username).
+		Scan(&existingGameID)
+
+	if err == nil {
+		s.getMatchmakingStatus(w, r)
 		return
 	}
-	userGameMapMutex.RUnlock()
 
-	log.Printf("Adding user %s (ELO: %d) to matchmaking queue.", username, userElo)
-	request := MatchmakingRequest{
+	matchmakingMutex.Lock()
+	matchmakingQueue = append(matchmakingQueue, MatchmakingRequest{
 		Username:  username,
 		Elo:       userElo,
 		Timestamp: time.Now(),
-	}
-	matchmakingQueue = append(matchmakingQueue, request)
+	})
+	matchmakingMutex.Unlock()
 
-	w.WriteHeader(http.StatusAccepted) // 202 Accepted is a good status code for "request received, processing in background"
-	json.NewEncoder(w).Encode(map[string]string{"message": "Searching for a match..."})
+	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"message": "Searching..."})
 }
 
-func runMatchmaker() {
+func runMatchmaker(s *Server) {
 	for {
-		// Run every few seconds
 		time.Sleep(3 * time.Second)
-
 		matchmakingMutex.Lock()
 		if len(matchmakingQueue) < 2 {
 			matchmakingMutex.Unlock()
-			continue // Not enough players to match
+			continue
 		}
 
 		var matchedIndices = make(map[int]bool)
@@ -514,44 +498,30 @@ func runMatchmaker() {
 				p1 := matchmakingQueue[i]
 				p2 := matchmakingQueue[j]
 
-				// Dynamic ELO range: expands the longer you wait
-				// After 10s, range is +/- 100. After 30s, +/- 300, etc.
 				waitDuration := time.Since(p1.Timestamp).Seconds()
 				eloRange := 50 + int(waitDuration*5)
-				eloDiff := p1.Elo - p2.Elo
-				if eloDiff < 0 {
-					eloDiff = -eloDiff
-				}
+				eloDiff := int(math.Abs(float64(p1.Elo - p2.Elo)))
 
 				if eloDiff <= eloRange {
-					log.Printf("Match found between %s (%d) and %s (%d)", p1.Username, p1.Elo, p2.Username, p2.Elo)
-
-					gamesMutex.Lock()
 					gameID := uuid.New().String()
-					gameSession := &GameSession{
-						Game:        chess.NewGame(),
-						PlayerWhite: p1.Username, // P1 is white by default
-						PlayerBlack: p2.Username,
-						State:       "in_progress",
+					log.Printf("Match: %s vs %s", p1.Username, p2.Username)
+
+					// Create game in DB
+					_, err := s.db.Exec(`INSERT INTO games (id, player_white, player_black, fen, state) 
+						VALUES ($1, $2, $3, $4, 'in_progress')`,
+						gameID, p1.Username, p2.Username, chess.NewGame().FEN())
+
+					if err == nil {
+						matchedIndices[i] = true
+						matchedIndices[j] = true
+						break
+					} else {
+						log.Println("Matchmaker DB Error:", err)
 					}
-					games[gameID] = gameSession
-					gamesMutex.Unlock()
-
-					// Store the game ID so players can find it
-					userGameMapMutex.Lock()
-					userGameMap[p1.Username] = gameID
-					userGameMap[p2.Username] = gameID
-					userGameMapMutex.Unlock()
-
-					// Mark players as matched so they aren't processed again
-					matchedIndices[i] = true
-					matchedIndices[j] = true
-					break // Stop searching for a match for p1
 				}
 			}
 		}
 
-		// Rebuild the queue with only the unmatched players
 		for i, req := range matchmakingQueue {
 			if !matchedIndices[i] {
 				newQueue = append(newQueue, req)
@@ -562,46 +532,37 @@ func runMatchmaker() {
 	}
 }
 
-func getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getMatchmakingStatus(w http.ResponseWriter, r *http.Request) {
 	username, ok := GetUsernameFromContext(r)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	userGameMapMutex.RLock()
-	gameID, found := userGameMap[username]
-	userGameMapMutex.RUnlock()
+	var gameID string
+	err := s.db.QueryRow("SELECT id FROM games WHERE (player_white=$1 OR player_black=$1) AND state='in_progress'", username).
+		Scan(&gameID)
 
-	if found {
-
-		sendJSONResponse(w, http.StatusOK, map[string]string{
-			"status": "found",
-			"gameID": gameID,
-		})
+	if err == nil {
+		sendJSONResponse(w, http.StatusOK, map[string]string{"status": "found", "gameID": gameID})
 	} else {
-		sendJSONResponse(w, http.StatusOK, map[string]string{
-			"status": "searching",
-		})
+		sendJSONResponse(w, http.StatusOK, map[string]string{"status": "searching"})
 	}
 }
 
-func getLeaderboard(w http.ResponseWriter, r *http.Request) {
+func (s *Server) getLeaderboard(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.db.Query("SELECT username, elo FROM users ORDER BY elo DESC LIMIT 10")
+	if err != nil {
+		http.Error(w, "DB Error", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
 
-	usersMutex.RLock()
-	defer usersMutex.RUnlock()
-	// only return top 4 users for now
 	var leaderboard []LeaderboardEntry
-	for username, data := range users {
-		leaderboard = append(leaderboard, LeaderboardEntry{Username: username, Elo: data.Elo})
+	for rows.Next() {
+		var e LeaderboardEntry
+		rows.Scan(&e.Username, &e.Elo)
+		leaderboard = append(leaderboard, e)
 	}
-	sort.Slice(leaderboard, func(i, j int) bool {
-		return leaderboard[i].Elo > leaderboard[j].Elo
-	})
-
-	if len(leaderboard) > 4 {
-		leaderboard = leaderboard[:4]
-	}
-
 	sendJSONResponse(w, http.StatusOK, leaderboard)
 }

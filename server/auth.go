@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 )
 
@@ -11,7 +12,7 @@ type contextKey string
 
 const userContextKey = contextKey("username")
 
-func AuthMiddleware(next http.Handler) http.Handler {
+func (s *Server) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sessionCookie, err := r.Cookie("session_token")
 		if err != nil {
@@ -20,23 +21,19 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		sessionToken := sessionCookie.Value
+		var username string
 
-		usersMutex.RLock()
-		var foundUsername string
-		for username, loginData := range users {
-			if loginData.SessionToken == sessionToken && sessionToken != "" {
-				foundUsername = username
-				break
-			}
-		}
-		usersMutex.RUnlock()
+		err = s.db.QueryRow("SELECT username FROM users WHERE session_token=$1", sessionToken).Scan(&username)
 
-		if foundUsername == "" {
+		if err == sql.ErrNoRows {
 			http.Error(w, "Unauthorized: Invalid session token", http.StatusUnauthorized)
+			return
+		} else if err != nil {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 
-		ctx := context.WithValue(r.Context(), userContextKey, foundUsername)
+		ctx := context.WithValue(r.Context(), userContextKey, username)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

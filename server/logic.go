@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"log"
 	"math"
 	"net/http"
 
@@ -15,6 +14,9 @@ const KFactor = 32
 
 type MoveRequest struct {
 	Move string `json:"move"`
+}
+type User struct {
+	Elo int
 }
 
 type MoveResponse struct {
@@ -54,33 +56,4 @@ func calculateNewRatings(player1Elo, player2Elo int, outcome chess.Outcome) (int
 	newElo2 := int(float64(player2Elo) + KFactor*(score2-p2))
 
 	return newElo1, newElo2
-}
-
-// updateElo updates the ratings for two players after a game.
-func updateElo(player1 string, player2 string, outcome chess.Outcome) {
-	usersMutex.Lock()
-	defer usersMutex.Unlock()
-
-	user1, ok1 := users[player1]
-	user2, ok2 := users[player2]
-
-	if !ok1 || !ok2 {
-		log.Printf("Could not find one or both users to update ELO: %s, %s", player1, player2)
-		return
-	}
-
-	// No outcome means no ELO change
-	if outcome == chess.NoOutcome {
-		return
-	}
-
-	// player1 is white, player2 is black
-	newElo1, newElo2 := calculateNewRatings(user1.Elo, user2.Elo, outcome)
-
-	log.Printf("ELO Update (%s): %s vs %s. %d -> %d, %d -> %d", outcome, player1, player2, user1.Elo, newElo1, user2.Elo, newElo2)
-
-	user1.Elo = newElo1
-	user2.Elo = newElo2
-	users[player1] = user1
-	users[player2] = user2
 }
