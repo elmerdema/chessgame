@@ -1,109 +1,55 @@
-## TODO: 
-Add proxy for the frontend part
-Improve chat ui
-add game history
-add game settings
+# Chess Game
 
-<div align="center">
+A multiplayer chess application built with Rust, WebAssembly, and Go. The game features real-time gameplay with WebSocket connections, user authentication, and a PostgreSQL database for persistent data storage.
 
-  <h1><code>wasm-pack-template</code></h1>
+## TODO
 
-  <strong>A template for kick starting a Rust and WebAssembly project using <a href="https://github.com/rustwasm/wasm-pack">wasm-pack</a>.</strong>
+- imrpove rust wasm structure
+- improve golang project structure
+- sound
+- add game settings (board themes, piece sets, sound effect toggles)
+- add game history
 
-  <p>
-    <a href="https://travis-ci.org/rustwasm/wasm-pack-template"><img src="https://img.shields.io/travis/rustwasm/wasm-pack-template.svg?style=flat-square" alt="Build Status" /></a>
-  </p>
 
-  <h3>
-    <a href="https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html">Tutorial</a>
-    <span> | </span>
-    <a href="https://discordapp.com/channels/442252698964721669/443151097398296587">Chat</a>
-  </h3>
 
-  <sub>Built with 🦀🕸 by <a href="https://rustwasm.github.io/">The Rust and WebAssembly Working Group</a></sub>
-</div>
+
 
 ## About
 
+This chess game combines a Rust/WebAssembly frontend for the chess logic and game board with a Go backend server handling multiplayer functionality, authentication, and data persistence. The application uses WebSockets for real-time game updates and PostgreSQL for storing user accounts and game data.
 
-This template is designed for compiling Rust libraries into WebAssembly and
-publishing the resulting package to NPM.
+The chess engine is implemented in Rust and compiled to WebAssembly for optimal performance in the browser, while the backend API and WebSocket server are written in Go using the Gorilla Mux router.
 
-Be sure to check out [other `wasm-pack` tutorials online][tutorials] for other
-templates and usages of `wasm-pack`.
-
-[tutorials]: https://rustwasm.github.io/docs/wasm-pack/tutorials/index.html
-[template-docs]: https://rustwasm.github.io/docs/wasm-pack/tutorials/npm-browser-packages/index.html
-
-
-###  Use `cargo generate` to Clone this Template
-
-[Learn more about `cargo generate` here.](https://github.com/ashleygwilliams/cargo-generate)
-
-```
-cargo generate --git https://github.com/rustwasm/wasm-pack-template.git --name my-project
-cd my-project
-```
-
-###  Build with `wasm-pack build`
-
-```
-wasm-pack build
-```
-
-
-
-##  Batteries Included
-
-* [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) for communicating
-  between WebAssembly and JavaScript.
-* [`console_error_panic_hook`](https://github.com/rustwasm/console_error_panic_hook)
-  for logging panic messages to the developer console.
-* `LICENSE-APACHE` and `LICENSE-MIT`: most Rust projects are licensed this way, so these are included for you
-
-## License
-
-Licensed under either of
-
-* Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-* MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-
-at your option.
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally
-submitted for inclusion in the work by you, as defined in the Apache-2.0
-license, shall be dual licensed as above, without any additional terms or
-conditions.
 
 ## Running the Project
 
-## Database Setup
+### Database Setup
 
-Before running the backend server, you need to set up PostgreSQL:
+Before running the backend server, you need to set up PostgreSQL.
 
-1. **Install PostgreSQL** if you haven't already.
-2. **Create a `.env` file** in the root directory based on [`.env.example`](.env.example) and set your `DATABASE_PASSWORD` to match your PostgreSQL password.
-3. **Create the database**: Connect to PostgreSQL using `psql` and run:
-   ```sql
-   CREATE DATABASE chessgame;
+Install PostgreSQL if you haven't already. Create a `.env` file in the root directory based on `.env.example` and set your `DATABASE_PASSWORD` to match your PostgreSQL password. Create the database by connecting to PostgreSQL using `psql` and running:
 
-1.  **Start the Backend Server:**
-    - 
-    -   Run the server: `go run .\server`
-    -   The server will start on `http://localhost:8081`.
+```sql
+CREATE DATABASE chessgame;
+```
 
-2.  **Start the Frontend Development Server:**
-    -   Build the wasm part using `wasm-pack build`
-    -   Navigate to the `www` directory: `cd www`
-    -   Install dependencies: `npm install`
-    -   Start the webpack development server: `npm start`
-    -   The frontend will be available at `http://localhost:8080`.
+### Starting the Application
 
+Start the Backend Server by running `go run ./server` from the root directory. The server will start on `http://localhost:8081`.
 
-3.  **Access the Application:**
-    -   Open your web browser and go to `http://localhost:8080/auth.html` to log in or register.
-    -   After logging in, you will be redirected to the main chess application at `http://localhost:8080/`.
+For the Frontend Development Server, first build the wasm part using `wasm-pack build`. Navigate to the `www` directory, install dependencies with `npm install`, then start the webpack development server with `npm start`. The frontend will be available at `http://localhost:8080`.
+
+### Accessing the Application
+
+Open your web browser and go to `http://localhost:8080/auth.html` to log in or register. After logging in, you will be redirected to the main chess application at `http://localhost:8080/`.
 
 ## Project Structure
+
+The project is organized into several main directories:
+
+- `src/` - Rust source code for the chess engine and WebAssembly bindings
+- `server/` - Go backend server with WebSocket handling and database operations
+- `www/` - Frontend web application with JavaScript, CSS, and HTML
+- `tests/` - Test files for the application
+
+The Rust code handles chess game logic, move validation, and board state management. The Go server manages user authentication, game rooms, and real-time communication between players. The frontend provides the user interface for playing chess and interacting with other players.

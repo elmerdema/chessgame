@@ -19,9 +19,6 @@ let moveHistory = []; // Array of {move: string, notation: string, player: strin
 let moveNumber = 1;
 
 const chessboardElement = document.getElementById("chessboard");
-const chessboardWidth = 400;
-const chessboardHeight = 400;
-const squareSize = chessboardWidth / 8;
 const colors = ["#eee", "#ccc"];
 
 const PIECES_BASE_PATH = "./pieces/";
@@ -58,7 +55,6 @@ async function initializePage() {
 
         switch (messageData.type) {
             case 'gameStateUpdate':
-                // The game state is now inside the 'payload' property
                 if (messageData.payload && messageData.payload.newFEN) {
                     // Only update if the FEN is different to avoid redundant redraws
                     if (chessgame.fen() !== messageData.payload.newFEN) {
@@ -130,7 +126,6 @@ async function initializePage() {
             };
             socket.send(JSON.stringify(chatPayload));
             
-            // Add own message to chat immediately for better UX
             const output = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message own';
@@ -229,6 +224,12 @@ function getPieceColor(pieceValue) {
 function drawChessboard() {
     if (!chessgame) return;
     chessboardElement.innerHTML = "";
+    
+    const containerHeight = chessboardElement.offsetHeight || 450;
+    const chessboardWidth = containerHeight;
+    const chessboardHeight = containerHeight;
+    const squareSize = chessboardWidth / 8;
+    
     chessboardElement.style.width = `${chessboardWidth}px`;
     chessboardElement.style.height = `${chessboardHeight}px`;
     chessboardElement.style.display = "grid";
@@ -331,7 +332,8 @@ async function onSquareClick(event) {
             try {
                 const isPromotion = await chessgame.make_move(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
                 
-                // Add animation to the moving piece
+                // animation, does this even work???? maybe not working due to the chessboard being 
+                // rendered everytime we receive/send something to the websocket?
                 const squares = chessboardElement.querySelectorAll('.chess-square');
                 const targetSquare = Array.from(squares).find(sq => 
                     parseInt(sq.dataset.row) === movingPiece.endRow && 
@@ -387,10 +389,6 @@ async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionC
         if (!response.ok) {
             throw new Error(moveResult.message || 'Server rejected a locally-validated move!');
         }
-        
-        // The server broadcasts the new state via WebSocket, so the client who
-        // made the move will also receive it. We can remove the explicit load_fen here
-        // to rely on a single source of truth (the WebSocket broadcast).
         // chessgame.load_fen(moveResult.newFEN);
         // checkGameEndConditions();
 
@@ -399,8 +397,7 @@ async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionC
         alert(`A critical error occurred: ${error.message}. Please refresh.`);
     } finally {
         isProcessingMove = false;
-        // The board will be redrawn when the WebSocket message is received.
-        // drawChessboard(); // This can also be removed to prevent a visual flicker.
+        // drawChessboard();
     }
 }
 
@@ -459,20 +456,18 @@ function convertToAlgebraicNotation(moveStr, player) {
     
     let notation = pieceSymbol;
     if (pieceSymbol === 'P' || pieceSymbol === 'p') {
-        notation = ''; // Pawns don't show piece symbol
+        notation = ''; 
     }
     
-    // Check if capture
     if (endPiece !== 0) {
         if (notation === '') {
-            notation = moveStr[0]; // File for pawn capture
+            notation = moveStr[0];
         }
         notation += 'x';
     }
     
-    notation += moveStr[2] + moveStr[3]; // Destination square
+    notation += moveStr[2] + moveStr[3];
     
-    // Add check/checkmate symbols
     if (chessgame.check()) {
         if (chessgame.checkmate()) {
             notation += '#';
@@ -508,7 +503,6 @@ function updateGameHistoryDisplay() {
     const historyElement = document.getElementById('game-history');
     if (!historyElement) return;
     
-    // Clear existing moves (keep the header)
     const existingMoves = historyElement.querySelectorAll('.move-entry');
     existingMoves.forEach(move => move.remove());
     
@@ -562,5 +556,5 @@ function updateGameStatus() {
     }
 }
 
-// starting point for the application
+
 initializePage();
