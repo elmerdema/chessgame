@@ -93,6 +93,11 @@ func (r *room) run() {
 			// Broadcast the message to all clients in the specific game room.
 			if gameClients, ok := r.games[gameID]; ok {
 				for client := range gameClients {
+					// Don't send chat messages back to the original sender
+					if msgType, ok := data["type"].(string); ok && msgType == "chat" && client == msg.client {
+						continue
+					}
+
 					select {
 					case client.receive <- broadcastMsg:
 						// message sent
