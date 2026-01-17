@@ -15,6 +15,8 @@ let myPlayerColor = null; // ('white' or 'black')
 let isProcessingMove = false;
 let selectedPiece = null; // {row, col}
 let possibleMoves = []; // Array of {row, col}
+let moveHistory = []; // Array of {move: string, notation: string, player: string, timestamp: Date}
+let moveNumber = 1;
 
 const chessboardElement = document.getElementById("chessboard");
 const chessboardWidth = 400;
@@ -62,18 +64,42 @@ async function initializePage() {
                     if (chessgame.fen() !== messageData.payload.newFEN) {
                         console.log("Applying game state update from server.");
                         chessgame.load_fen(messageData.payload.newFEN);
+                        
+                        // Update move history if move is included
+                        if (messageData.payload.move) {
+                            addMoveToHistory(messageData.payload.move, messageData.payload.player);
+                        }
+                        
                         drawChessboard();
+                        updateGameStatus();
                         checkGameEndConditions();
                     }
                 }
                 break;
             case 'chat':
                 const output = document.getElementById('chat-messages');
-                const p = document.createElement('p');
-                p.textContent = messageData.payload;
-                output.appendChild(p);
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                messageContent.textContent = messageData.payload;
+                
+                const timestamp = document.createElement('div');
+                timestamp.className = 'message-timestamp';
+                const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                timestamp.textContent = time;
+                
+                const sender = document.createElement('div');
+                sender.className = 'message-sender';
+                sender.textContent = messageData.sender || 'Opponent';
+                
+                messageDiv.appendChild(sender);
+                messageDiv.appendChild(messageContent);
+                messageDiv.appendChild(timestamp);
+                
+                output.appendChild(messageDiv);
                 output.scrollTop = output.scrollHeight;
-
 
                 break;
             default:
@@ -103,6 +129,32 @@ async function initializePage() {
                 gameID: currentGameID
             };
             socket.send(JSON.stringify(chatPayload));
+            
+            // Add own message to chat immediately for better UX
+            const output = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message own';
+            
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+            messageContent.textContent = messageInput.value;
+            
+            const timestamp = document.createElement('div');
+            timestamp.className = 'message-timestamp';
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            timestamp.textContent = time;
+            
+            const sender = document.createElement('div');
+            sender.className = 'message-sender';
+            sender.textContent = 'You';
+            
+            messageDiv.appendChild(sender);
+            messageDiv.appendChild(messageContent);
+            messageDiv.appendChild(timestamp);
+            
+            output.appendChild(messageDiv);
+            output.scrollTop = output.scrollHeight;
+            
             messageInput.value = ''; 
         }
     };
@@ -119,6 +171,15 @@ async function initializePage() {
         
         myPlayerColor = gameData.playerColor; 
         chessgame.load_fen(gameData.fen);
+        
+        // Initialize move history if available
+        if (gameData.moveHistory) {
+            moveHistory = gameData.moveHistory;
+            updateGameHistoryDisplay();
+        }
+        
+        // Update game status indicators
+        updateGameStatus();
         
         console.log(`Loaded game ${currentGameID}. Your color: ${myPlayerColor}.`);
         document.title = `Chess Game - ${currentGameID}`;
@@ -183,22 +244,34 @@ function drawChessboard() {
             const col = isBlackView ? 7 - visualCol : visualCol;
 
             const square = document.createElement("div");
+            square.className = 'chess-square';
             const pieceValue = boardData[row * 8 + col];
-            let bgColor = colors[(row + col) % 2];
-            let borderColor = "none";
+            
+            // Set square position for absolute positioning
+            square.style.width = `${squareSize}px`;
+            square.style.height = `${squareSize}px`;
+            square.style.position = 'absolute';
+            square.style.left = `${visualCol * squareSize}px`;
+            square.style.top = `${visualRow * squareSize}px`;
+            
+            // Apply checkerboard pattern
+            const isLightSquare = (row + col) % 2 === 0;
+            square.style.backgroundColor = isLightSquare ? '#f0d9b5' : '#b58863';
+            
             let cursorStyle = "default";
 
+            // Handle selected piece
             if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
-                borderColor = "3px solid blue";
+                square.classList.add('selected');
             }
+            
+            // Handle possible moves
             if (possibleMoves.some(move => move.row === row && move.col === col)) {
-                bgColor = "rgba(0, 255, 0, 0.5)";
+                const isCapture = boardData[row * 8 + col] !== 0;
+                square.classList.add(isCapture ? 'possible-capture' : 'possible-move');
                 cursorStyle = "pointer";
             }
 
-            square.style.backgroundColor = bgColor;
-            square.style.border = borderColor;
-            square.style.boxSizing = "border-box";
             square.style.cursor = cursorStyle;
             square.style.display = "flex";
             square.style.justifyContent = "center";
@@ -208,6 +281,10 @@ function drawChessboard() {
                 const pieceElement = document.createElement("img");
                 pieceElement.src = getPieceImagePath(pieceValue);
                 pieceElement.style.pointerEvents = 'none';
+                pieceElement.style.width = '80%';
+                pieceElement.style.height = '80%';
+                pieceElement.style.objectFit = 'contain';
+                pieceElement.className = 'chess-piece';
                 square.appendChild(pieceElement);
             }
 
@@ -253,6 +330,22 @@ async function onSquareClick(event) {
             
             try {
                 const isPromotion = await chessgame.make_move(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
+                
+                // Add animation to the moving piece
+                const squares = chessboardElement.querySelectorAll('.chess-square');
+                const targetSquare = Array.from(squares).find(sq => 
+                    parseInt(sq.dataset.row) === movingPiece.endRow && 
+                    parseInt(sq.dataset.col) === movingPiece.endCol
+                );
+                
+                if (targetSquare) {
+                    const piece = targetSquare.querySelector('.chess-piece');
+                    if (piece) {
+                        piece.classList.add('piece-moving');
+                        setTimeout(() => piece.classList.remove('piece-moving'), 300);
+                    }
+                }
+                
                 drawChessboard();
                 if (isPromotion) {
                     showPromotionDialog(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
@@ -344,5 +437,130 @@ function checkGameEndConditions() {
     }
 }
 
-// starting point for the appplication
+function convertToAlgebraicNotation(moveStr, player) {
+    // Simple conversion from coordinate notation to algebraic notation
+    // This is a basic implementation - could be enhanced for castling, en passant, etc.
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    const pieces = {
+        1: 'P', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K', // White pieces
+        9: 'p', 10: 'n', 11: 'b', 12: 'r', 13: 'q', 14: 'k' // Black pieces
+    };
+    
+    if (moveStr.length < 4) return moveStr;
+    
+    const startCol = files.indexOf(moveStr[0]);
+    const startRow = 8 - parseInt(moveStr[1]);
+    const endCol = files.indexOf(moveStr[2]);
+    const endRow = 8 - parseInt(moveStr[3]);
+    
+    const startPiece = chessgame.get_piece(startRow, startCol);
+    const endPiece = chessgame.get_piece(endRow, endCol);
+    const pieceSymbol = pieces[startPiece] || '';
+    
+    let notation = pieceSymbol;
+    if (pieceSymbol === 'P' || pieceSymbol === 'p') {
+        notation = ''; // Pawns don't show piece symbol
+    }
+    
+    // Check if capture
+    if (endPiece !== 0) {
+        if (notation === '') {
+            notation = moveStr[0]; // File for pawn capture
+        }
+        notation += 'x';
+    }
+    
+    notation += moveStr[2] + moveStr[3]; // Destination square
+    
+    // Add check/checkmate symbols
+    if (chessgame.check()) {
+        if (chessgame.checkmate()) {
+            notation += '#';
+        } else {
+            notation += '+';
+        }
+    }
+    
+    return notation;
+}
+
+function addMoveToHistory(moveStr, player) {
+    const notation = convertToAlgebraicNotation(moveStr, player);
+    const moveEntry = {
+        move: moveStr,
+        notation: notation,
+        player: player,
+        timestamp: new Date(),
+        moveNumber: moveNumber
+    };
+    
+    moveHistory.push(moveEntry);
+    
+    // Increment move number after black moves
+    if (player === 'black') {
+        moveNumber++;
+    }
+    
+    updateGameHistoryDisplay();
+}
+
+function updateGameHistoryDisplay() {
+    const historyElement = document.getElementById('game-history');
+    if (!historyElement) return;
+    
+    // Clear existing moves (keep the header)
+    const existingMoves = historyElement.querySelectorAll('.move-entry');
+    existingMoves.forEach(move => move.remove());
+    
+    moveHistory.forEach((moveEntry, index) => {
+        const moveDiv = document.createElement('div');
+        moveDiv.className = 'move-entry';
+        
+        // Add move number for white moves
+        if (moveEntry.player === 'white') {
+            const moveNumberSpan = document.createElement('span');
+            moveNumberSpan.className = 'move-number';
+            moveNumberSpan.textContent = `${moveEntry.moveNumber}. `;
+            moveDiv.appendChild(moveNumberSpan);
+        }
+        
+        // Add notation
+        const notationSpan = document.createElement('span');
+        notationSpan.className = 'move-notation';
+        notationSpan.textContent = moveEntry.notation;
+        moveDiv.appendChild(notationSpan);
+        
+        // Highlight current move
+        if (index === moveHistory.length - 1) {
+            moveDiv.classList.add('current');
+        }
+        
+        historyElement.appendChild(moveDiv);
+    });
+    
+    // Scroll to bottom
+    historyElement.scrollTop = historyElement.scrollHeight;
+}
+
+function updateGameStatus() {
+    const currentTurnElement = document.getElementById('current-turn');
+    const playerColorElement = document.getElementById('player-color');
+    const gameIdElement = document.getElementById('game-id');
+    
+    if (currentTurnElement && chessgame) {
+        const currentTurnColor = chessgame.get_current_turn() === WHITE ? 'White' : 'Black';
+        currentTurnElement.textContent = currentTurnColor;
+    }
+    
+    if (playerColorElement && myPlayerColor) {
+        playerColorElement.textContent = myPlayerColor.charAt(0).toUpperCase() + myPlayerColor.slice(1);
+        playerColorElement.className = `status-value ${myPlayerColor}`;
+    }
+    
+    if (gameIdElement && currentGameID) {
+        gameIdElement.textContent = currentGameID;
+    }
+}
+
+// starting point for the application
 initializePage();

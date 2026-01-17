@@ -9,9 +9,23 @@
 <body>
     <noscript>This page contains webassembly and javascript content, please enable javascript in your browser.</noscript>
     <div id="playground">
+        <div id="game-status">
+            <div class="status-item">
+                <span class="status-label">Turn:</span>
+                <span id="current-turn" class="status-value">White</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">You:</span>
+                <span id="player-color" class="status-value">White</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Game ID:</span>
+                <span id="game-id" class="status-value">-</span>
+            </div>
+        </div>
         <div id="chessboard"></div>
         <div id="board-layout-controls">
-            <img id="logo" src="pieces/gear.png" alt="setings"> 
+            <img id="logo" src="pieces/gear.png" alt="settings"> 
         </div>
         <div id="sidebar-component">
             <div id="game-history">

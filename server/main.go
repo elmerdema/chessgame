@@ -1,5 +1,7 @@
 package main
 
+//go run .\server
+
 import (
 	"database/sql"
 	"encoding/json"
@@ -409,6 +411,32 @@ func (s *Server) makeMoveHandler(room *room) http.HandlerFunc {
 				Status:  "ok",
 				NewFEN:  newFen,
 				Outcome: string(outcome),
+				Turn:    game.Position().Turn().Name(),
+			}
+
+			wsMessage := WebSocketMessage{
+				Type:    "gameStateUpdate",
+				Payload: response,
+				GameID:  gameID,
+			}
+
+			bytes, _ := json.Marshal(wsMessage)
+			room.forward <- &Message{content: bytes}
+			sendJSONResponse(w, http.StatusOK, response)
+		} else {
+			_, err = s.db.Exec(`UPDATE games SET fen = $1, updated_at = NOW() WHERE id = $2`,
+				newFen, gameID)
+
+			if err != nil {
+				http.Error(w, "Failed to save game", http.StatusInternalServerError)
+				return
+			}
+
+			response := MoveResponse{
+				GameID:  gameID,
+				Status:  "ok",
+				NewFEN:  newFen,
+				Outcome: "",
 				Turn:    game.Position().Turn().Name(),
 			}
 

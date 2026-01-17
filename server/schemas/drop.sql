@@ -1,0 +1,4 @@
+-- Rollback migration
+DROP TABLE IF EXISTS matchmaking_queue CASCADE;
+DROP TABLE IF EXISTS games CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
