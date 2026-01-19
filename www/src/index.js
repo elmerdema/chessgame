@@ -7,7 +7,7 @@ import {
     pieceImageMap
 } from "./pieces.js";
 import { showPromotionDialog, hidePromotionDialog, setOnPromotionCompleted, setPromotionGameAndConstants } from "./promotion.js";
-
+import { loadAllSounds, play } from "./sound.js";
 const API_BASE_URL = "/api";
 let chessgame = null;
 let currentGameID = null;
@@ -19,12 +19,12 @@ let moveHistory = []; // Array of {move: string, notation: string, player: strin
 let moveNumber = 1;
 
 const chessboardElement = document.getElementById("chessboard");
-const colors = ["#eee", "#ccc"];
 
 const PIECES_BASE_PATH = "./pieces/";
 const promotionDialog = document.getElementById("promotion-dialog");
 
 async function initializePage() {
+    await loadAllSounds();
     const urlParams = new URLSearchParams(window.location.search);
     currentGameID = urlParams.get('gameId');
     if (!currentGameID) {
@@ -61,11 +61,10 @@ async function initializePage() {
                         console.log("Applying game state update from server.");
                         chessgame.load_fen(messageData.payload.newFEN);
                         
-                        // Update move history if move is included
                         if (messageData.payload.move) {
                             addMoveToHistory(messageData.payload.move, messageData.payload.player);
                         }
-                        
+                        play("move")
                         drawChessboard();
                         updateGameStatus();
                         checkGameEndConditions();
@@ -73,6 +72,7 @@ async function initializePage() {
                 }
                 break;
             case 'chat':
+                play("notification");
                 const output = document.getElementById('chat-messages');
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'chat-message';
@@ -166,16 +166,14 @@ async function initializePage() {
         
         myPlayerColor = gameData.playerColor; 
         chessgame.load_fen(gameData.fen);
+        play("start")
         
-        // Initialize move history if available
         if (gameData.moveHistory) {
             moveHistory = gameData.moveHistory;
             updateGameHistoryDisplay();
         }
         
-        // Update game status indicators
         updateGameStatus();
-        
         console.log(`Loaded game ${currentGameID}. Your color: ${myPlayerColor}.`);
         document.title = `Chess Game - ${currentGameID}`;
         
@@ -309,7 +307,7 @@ async function onSquareClick(event) {
         return;
     }
     
-    // Client-side turn enforcement 
+    // Client-side turn enforcement
     const currentTurnColor = chessgame.get_current_turn() === WHITE ? 'white' : 'black';
     if (myPlayerColor !== currentTurnColor) {
         return;
@@ -491,14 +489,13 @@ function addMoveToHistory(moveStr, player) {
     
     moveHistory.push(moveEntry);
     
-    // Increment move number after black moves
     if (player === 'black') {
         moveNumber++;
     }
     
     updateGameHistoryDisplay();
 }
-
+// TODO: this whole function should be moved to server.
 function updateGameHistoryDisplay() {
     const historyElement = document.getElementById('game-history');
     if (!historyElement) return;
@@ -532,7 +529,6 @@ function updateGameHistoryDisplay() {
         historyElement.appendChild(moveDiv);
     });
     
-    // Scroll to bottom
     historyElement.scrollTop = historyElement.scrollHeight;
 }
 

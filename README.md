@@ -4,7 +4,6 @@ A multiplayer chess application built with Rust, WebAssembly, and Go. The game f
 
 ## TODO
 
-- improve golang project structure
 - sound
 - add game settings (board themes, piece sets, sound effect toggles)
 - add game history

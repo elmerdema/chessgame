@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         findMatchButton.disabled = false;
         matchmakingStatus.textContent = 'Search canceled. Click the button to find an opponent.';
         // TODO: implement a more robust system,
-        // you would send a request to a `/api/matchmaking/cancel` endpoint.
+        // send a request to a `/api/matchmaking/cancel` endpoint.
     };
 
     cancelSearchButton.addEventListener('click', cancelMatchmaking);
@@ -43,13 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Match found! Game ID:', data.gameID);
                 clearInterval(matchmakingInterval);
                 matchmakingInterval = null;
-                // The popup will disappear when the page redirects
                 window.location.href = `/index.html?gameId=${data.gameID}`;
             }
         } catch (error) {
             console.error('Error checking match status:', error);
             alert('An error occurred during matchmaking. Please try again.');
-            cancelMatchmaking(); // Use the cancel function to clean up
+            cancelMatchmaking();
         }
     };
 

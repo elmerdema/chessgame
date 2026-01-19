@@ -1,5 +1,5 @@
 import { getPieceImagePath } from "./index.js";
-
+import { loadAllSounds, play } from "./sound.js";
 
 let _chessgame = null;
 let _promotionConstants = {};
@@ -55,6 +55,12 @@ export async function onPromotionChoice(event) {
                 case 3: promotionChar = 'n'; break; // Knight
             }
             // callback with all info needed to sync with the server
+            try {
+                await loadAllSounds();
+                play("promote");
+            } catch (e) {
+                console.warn("Failed to play promote sound:", e);
+            }
             onPromotionCompletedCallback(startX, startY, endX, endY, promotionChar);
         }
 

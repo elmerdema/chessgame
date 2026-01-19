@@ -1,4 +1,4 @@
-
+import { loadAllSounds, play } from "./sound.js";
 
 let onNotificationCloseCallback = () => {};
 
@@ -11,14 +11,16 @@ function getNotificationElements() {
     return { overlay, notification, closeBtn, winnerMessage };
 }
 
-export function showNotification(winner) {
+export async function showNotification(winner) {
     const { overlay, notification, closeBtn, winnerMessage } = getNotificationElements();
-
+    await loadAllSounds();
     if (!overlay || !notification || !winnerMessage) {
         console.error("Notification elements not found for showNotification.");
         return;
     }
+    play("end");
     if (winner === "draw") {
+        
         winnerMessage.textContent = "It's a Draw! No Checkmate.";
     }
     else {
