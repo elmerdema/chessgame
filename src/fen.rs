@@ -42,7 +42,6 @@ impl ChessGame {
             }
         }
 
-        //  Active Color
         fen_string.push(' ');
         fen_string.push(if self.current_turn == WHITE { 'w' } else { 'b' });
 
@@ -109,7 +108,7 @@ pub fn load_fen(&mut self, fen:&str) -> Result<(), JsValue> {
     }
     self.board = new_board;
 
-    self.current_turn = if parts[1]== "w" { WHITE} else {BLACK}; //active color 
+    self.current_turn = if parts[1]== "w" { WHITE} else {BLACK};
 
     //castling
     let castling = parts[2];

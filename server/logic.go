@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"net/http"
+	"time"
 
 	"github.com/corentings/chess"
+	"github.com/google/uuid"
 )
 
 // Commonly used K-factor in Elo rating systems
@@ -56,4 +59,62 @@ func calculateNewRatings(player1Elo, player2Elo int, outcome chess.Outcome) (int
 	newElo2 := int(float64(player2Elo) + KFactor*(score2-p2))
 
 	return newElo1, newElo2
+}
+
+func runMatchmaker(s *Server) {
+	for {
+		time.Sleep(3 * time.Second)
+		matchmakingMutex.Lock()
+		if len(matchmakingQueue) < 2 {
+			matchmakingMutex.Unlock()
+			continue
+		}
+
+		var matchedIndices = make(map[int]bool)
+		var newQueue []MatchmakingRequest
+
+		for i := 0; i < len(matchmakingQueue); i++ {
+			if matchedIndices[i] {
+				continue
+			}
+			for j := i + 1; j < len(matchmakingQueue); j++ {
+				if matchedIndices[j] {
+					continue
+				}
+
+				p1 := matchmakingQueue[i]
+				p2 := matchmakingQueue[j]
+
+				waitDuration := time.Since(p1.Timestamp).Seconds()
+				eloRange := 50 + int(waitDuration*5)
+				eloDiff := int(math.Abs(float64(p1.Elo - p2.Elo)))
+
+				if eloDiff <= eloRange {
+					gameID := uuid.New().String()
+					log.Printf("Match: %s vs %s", p1.Username, p2.Username)
+
+					// Create game in DB
+					_, err := s.db.Exec(`INSERT INTO games (id, player_white, player_black, fen, state) 
+						VALUES ($1, $2, $3, $4, 'in_progress')`,
+						gameID, p1.Username, p2.Username, chess.NewGame().FEN())
+
+					if err == nil {
+						matchedIndices[i] = true
+						matchedIndices[j] = true
+						break
+					} else {
+						log.Println("Matchmaker DB Error:", err)
+					}
+				}
+			}
+		}
+
+		for i, req := range matchmakingQueue {
+			if !matchedIndices[i] {
+				newQueue = append(newQueue, req)
+			}
+		}
+		matchmakingQueue = newQueue
+		matchmakingMutex.Unlock()
+	}
 }

@@ -14,8 +14,6 @@ impl ChessGame {
     pub fn make_move(&mut self, start_x: usize, start_y: usize, end_x: usize, end_y: usize) -> Result<Option<Vec<usize>>, JsValue> {
 
         let (sx, sy, ex, ey) = (start_x as i32, start_y as i32, end_x as i32, end_y as i32);
-
-        // Get piece info *before* the move, for validation and then for promotion check
         let piece_at_start = self.get_piece(start_x, start_y);
         // let piece_type_at_start = utils::get_piece_type(piece_at_start);
         let piece_color_at_start = utils::get_piece_color(piece_at_start);
@@ -70,19 +68,18 @@ impl ChessGame {
         let piece_type = utils::get_piece_type(piece);
         let piece_color = utils::get_piece_color(piece); // Keep this for castling rights updates
 
-        // --- Handle special captures/moves before moving the piece ---
-        // 1. Handle En Passant Capture (remove the passed pawn)
+        // Handle En Passant Capture (remove the passed pawn)
         if piece_type == 1 && self.is_en_passant_move(start_x, start_y, end_x, end_y) {
             let captured_pawn_x = start_x; // Captured pawn is on the start rank
             let captured_pawn_y = end_y;   // Captured pawn is on the destination file
             self.board[captured_pawn_x as usize][captured_pawn_y as usize] = 0;
         }
 
-        // 2. Move the piece
+        // Move the piece
         self.board[end_x as usize][end_y as usize] = piece;
         self.board[start_x as usize][start_y as usize] = 0;
 
-        // 3. Handle Castling (move the rook)
+        // Handle Castling (move the rook)
         if piece_type == 6 && (end_y - start_y).abs() == 2 {
             let (rook_start_y, rook_end_y) = if end_y > start_y {
                 (7, 5) // Kingside: H-file rook to F-file
@@ -94,7 +91,7 @@ impl ChessGame {
             self.board[start_x as usize][rook_start_y] = 0;
         }
 
-        // --- Post-Move State Update (only if not a simulation) ---
+        // Post-Move State Update (only if not a simulation)
         if !is_simulation {
             // Update Castling Rights
             // If King moved
