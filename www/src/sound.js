@@ -113,8 +113,8 @@ export async function loadAllSounds() {
     const sounds = new Map();
     sounds.set("start", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/game-start.mp3"); //done
     sounds.set("move", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-self.mp3");  //done
-    sounds.set("capture", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3");
-    sounds.set("check", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3");
+    sounds.set("capture", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/capture.mp3");//done
+    sounds.set("check", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/move-check.mp3"); //done
     sounds.set("end", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/game-end.mp3"); //done
     sounds.set("promote", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/promote.mp3"); //done
     sounds.set("time", "https://images.chesscomfiles.com/chess-themes/sounds/_MP3_/default/tenseconds.mp3");

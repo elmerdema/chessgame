@@ -17,6 +17,7 @@ let selectedPiece = null; // {row, col}
 let possibleMoves = []; // Array of {row, col}
 let moveHistory = []; // Array of {move: string, notation: string, player: string, timestamp: Date}
 let moveNumber = 1;
+let wasUserInCheck = false;
 
 const chessboardElement = document.getElementById("chessboard");
 
@@ -44,7 +45,6 @@ async function initializePage() {
 
     socket.onopen = () => {
         console.log("Unified WebSocket connection established for game and chat:", currentGameID);
-        // Enable the chat input now that the connection is open
         document.getElementById('chat-input').disabled = false;
         document.getElementById('chat-input').placeholder = "Type your message here...";
     };
@@ -59,12 +59,23 @@ async function initializePage() {
                     // Only update if the FEN is different to avoid redundant redraws
                     if (chessgame.fen() !== messageData.payload.newFEN) {
                         console.log("Applying game state update from server.");
+                        
+                        // Detect if this was a capture move by checking the move notation
+                        const moveNotation = messageData.payload.move || '';
+                        const isCapture = moveNotation.includes('x');
+                        
                         chessgame.load_fen(messageData.payload.newFEN);
                         
                         if (messageData.payload.move) {
                             addMoveToHistory(messageData.payload.move, messageData.payload.player);
                         }
-                        play("move")
+                        
+                        if (isCapture) {
+                            play("capture");
+                        } else {
+                            play("move");
+                        }
+                        
                         drawChessboard();
                         updateGameStatus();
                         checkGameEndConditions();
@@ -105,7 +116,7 @@ async function initializePage() {
 
     socket.onclose = (event) => {
         console.log("WebSocket connection closed.", event.reason);
-        // Disable the chat input if the connection is lost
+        // chat input disabled if the connection is lost
         const chatInput = document.getElementById('chat-input');
         chatInput.disabled = true;
         chatInput.placeholder = "Connection closed.";
@@ -198,12 +209,10 @@ function setupWasmAndListeners() {
         B_QUEEN, B_ROOK, B_KNIGHT, B_BISHOP
     });
 
-    // When a promotion is chosen in the dialog, sync it with the server
     setOnPromotionCompleted((startRow, startCol, endRow, endCol, promotionChar) => {
         syncMoveWithServer(startRow, startCol, endRow, endCol, promotionChar);
     });
 
-    // When the game-over notification is closed, redirect to the lobby
     setOnNotificationClose(() => { window.location.href = '/lobby.html'; });
     initNotificationEventListeners();
 }
@@ -246,14 +255,13 @@ function drawChessboard() {
             square.className = 'chess-square';
             const pieceValue = boardData[row * 8 + col];
             
-            // Set square position for absolute positioning
             square.style.width = `${squareSize}px`;
             square.style.height = `${squareSize}px`;
             square.style.position = 'absolute';
             square.style.left = `${visualCol * squareSize}px`;
             square.style.top = `${visualRow * squareSize}px`;
             
-            // Apply checkerboard pattern
+            // checkerboard pattern
             const isLightSquare = (row + col) % 2 === 0;
             square.style.backgroundColor = isLightSquare ? '#f0d9b5' : '#b58863';
             
@@ -328,7 +336,16 @@ async function onSquareClick(event) {
             possibleMoves = [];
             
             try {
+                const targetPiece = chessgame.get_piece(movingPiece.endRow, movingPiece.endCol);
+                const isCapture = targetPiece !== 0;
+                
                 const isPromotion = await chessgame.make_move(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
+                
+                if (isCapture) {
+                    play("capture");
+                } else {
+                    play("move");
+                }
                 
                 // animation, does this even work???? maybe not working due to the chessboard being 
                 // rendered everytime we receive/send something to the websocket?
@@ -412,7 +429,17 @@ function handlePieceSelection(row, col) {
 }
 
 function warnKingCheck() {
-    if (chessgame.check()) {
+    const isInCheck = chessgame.check();
+    const myTurnConst = myPlayerColor === 'white' ? WHITE : BLACK;
+    const isUsersTurn = myPlayerColor && chessgame.get_current_turn() === myTurnConst;
+    const isUserInCheck = Boolean(isInCheck && isUsersTurn);
+
+    if (isUserInCheck && !wasUserInCheck) {
+        play("check");
+    }
+    wasUserInCheck = isUserInCheck;
+
+    if (isInCheck) {
         const kingPosition = chessgame.get_king_position();
         if (kingPosition && kingPosition.length === 2) {
             const kingSquare = document.querySelector(`[data-row="${kingPosition[0]}"][data-col="${kingPosition[1]}"]`);
