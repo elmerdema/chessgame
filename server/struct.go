@@ -12,7 +12,7 @@ type Server struct {
 	db *sql.DB
 }
 
-type GameSession struct { // Used for API responses
+type GameSession struct {
 	Game        *chess.Game
 	PlayerWhite string
 	PlayerBlack string
@@ -45,20 +45,21 @@ type WebSocketMessage struct {
 
 // GameTimer tracks time for each player in a game
 type GameTimer struct {
-	WhiteTimeRemaining time.Duration // Time left for white player
-	BlackTimeRemaining time.Duration // Time left for black player
-	LastMoveTime       time.Time     // When the last move was made
-	CurrentTurn        chess.Color   // Whose turn it is
-	TimeControl        time.Duration // Initial time per player (e.g., 10 minutes)
-	Increment          time.Duration // Increment per move (e.g., 5 seconds)
-	IsActive           bool          // Whether the timer is running
-	mu                 sync.RWMutex  // Protect concurrent access
+	WhiteTimeRemaining time.Duration
+	BlackTimeRemaining time.Duration
+	LastMoveTime       time.Time
+	CurrentTurn        chess.Color
+	TimeControl        time.Duration
+	Increment          time.Duration
+	IsActive           bool
+	// Protect concurrent access
+	mu sync.RWMutex
 }
 
 // TimerState represents the current state sent to clients
 type TimerState struct {
-	WhiteTime   float64 `json:"whiteTime"`   // Seconds remaining for white
-	BlackTime   float64 `json:"blackTime"`   // Seconds remaining for black
-	CurrentTurn string  `json:"currentTurn"` // "white" or "black"
+	WhiteTime   float64 `json:"whiteTime"`
+	BlackTime   float64 `json:"blackTime"`
+	CurrentTurn string  `json:"currentTurn"`
 	IsActive    bool    `json:"isActive"`
 }

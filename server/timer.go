@@ -21,7 +21,7 @@ const (
 	DefaultIncrement   = 5 * time.Second
 )
 
-// InitializeGameTimer creates a new timer for a game
+// used to create a new timer for a game
 func initializeGameTimer(gameID string, timeControl, increment time.Duration) {
 	gameTimersMutex.Lock()
 	defer gameTimersMutex.Unlock()
