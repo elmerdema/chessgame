@@ -54,7 +54,8 @@ func main() {
 	auth.Handle("/ws", room).Methods("GET")
 
 	go room.run()
-	go runMatchmaker(srv) // passedd server to matchmaker to access DB
+	go runMatchmaker(srv)    // passedd server to matchmaker to access DB
+	go runTimerChecker(room) // Start timer checker for broadcasting timer updates
 
 	c := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:8080"},

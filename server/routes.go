@@ -210,6 +210,12 @@ func (s *Server) getGame(w http.ResponseWriter, r *http.Request) {
 		"state":       state,
 		"playerColor": playerColor,
 	}
+
+	// Add timer state if available
+	if timerState, err := getTimerState(gameID); err == nil {
+		response["timer"] = timerState
+	}
+
 	sendJSONResponse(w, http.StatusOK, response)
 }
 
@@ -278,6 +284,49 @@ func (s *Server) makeMoveHandler(room *room) http.HandlerFunc {
 			return
 		}
 
+		if err := updateGameTimer(gameID, game); err != nil {
+			// If time expired, handle as game over
+			if err.Error() == "white ran out of time" || err.Error() == "black ran out of time" {
+				winner := "black"
+				if err.Error() == "black ran out of time" {
+					winner = "white"
+				}
+
+				// Update database with time forfeit
+				_, dbErr := s.db.Exec(`UPDATE games SET state = 'finished', winner = $1, updated_at = NOW() WHERE id = $2`,
+					winner, gameID)
+
+				if dbErr != nil {
+					log.Printf("Failed to save time forfeit: %v", dbErr)
+				}
+
+				// Clean up timer
+				cleanupGameTimer(gameID)
+
+				//forfeit response
+				response := MoveResponse{
+					GameID:  gameID,
+					Status:  "time_forfeit",
+					Message: fmt.Sprintf("%s won by time forfeit", winner),
+					NewFEN:  game.FEN(),
+					Outcome: "time_forfeit",
+					Turn:    game.Position().Turn().Name(),
+				}
+
+				wsMessage := WebSocketMessage{
+					Type:    "gameStateUpdate",
+					Payload: response,
+					GameID:  gameID,
+				}
+
+				bytes, _ := json.Marshal(wsMessage)
+				room.forward <- &Message{content: bytes}
+				sendJSONResponse(w, http.StatusOK, response)
+				return
+			}
+			log.Printf("Timer error (non-critical): %v", err)
+		}
+
 		outcome := game.Outcome()
 		newFen := game.FEN()
 		newState := "in_progress"
@@ -304,6 +353,9 @@ func (s *Server) makeMoveHandler(room *room) http.HandlerFunc {
 				http.Error(w, "Failed to save game", http.StatusInternalServerError)
 				return
 			}
+
+			// Clean up timer when game ends
+			cleanupGameTimer(gameID)
 
 			response := MoveResponse{
 				GameID:  gameID,
@@ -351,8 +403,6 @@ func (s *Server) makeMoveHandler(room *room) http.HandlerFunc {
 		}
 	}
 }
-
-// --- Matchmaking & Leaderboard ---
 
 func (s *Server) findMatch(w http.ResponseWriter, r *http.Request) {
 	username, ok := GetUsernameFromContext(r)

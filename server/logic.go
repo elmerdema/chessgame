@@ -99,6 +99,8 @@ func runMatchmaker(s *Server) {
 						gameID, p1.Username, p2.Username, chess.NewGame().FEN())
 
 					if err == nil {
+						initializeGameTimer(gameID, DefaultTimeControl, DefaultIncrement)
+
 						matchedIndices[i] = true
 						matchedIndices[j] = true
 						break
