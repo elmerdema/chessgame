@@ -4,3 +4,7 @@ psql -U postgres
 \c chessgame
  \i 'C:/Users/Administrator/Desktop/chessgame/server/schemas/schema.sql'
  chessgame=# \d users
+
+
+//clear db
+ psql -U postgres -d chessgame -c "TRUNCATE TABLE games, users CASCADE;"

@@ -10,9 +10,9 @@
             window.location.replace('auth.html');
             return;
         }
-        
+
         const userData = await response.json();
-        
+
         initializeApp(userData.username);
 
     } catch (error) {

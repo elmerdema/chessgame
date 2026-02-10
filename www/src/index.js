@@ -8,10 +8,12 @@ import {
 } from "./pieces.js";
 import { showPromotionDialog, hidePromotionDialog, setOnPromotionCompleted, setPromotionGameAndConstants } from "./promotion.js";
 import { loadAllSounds, play } from "./sound.js";
+import { ChessTimer } from "./timer-example.js";
 const API_BASE_URL = "/api";
 let chessgame = null;
 let currentGameID = null;
 let myPlayerColor = null; // ('white' or 'black')
+let timer = null; // ChessTimer instance
 let isProcessingMove = false;
 let selectedPiece = null; // {row, col}
 let possibleMoves = []; // Array of {row, col}
@@ -33,14 +35,14 @@ async function initializePage() {
         window.location.href = '/lobby.html';
         return;
     }
-    
+
 
     const socketProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const socketHost = window.location.hostname + ':8081';
     const socketURL = `${socketProtocol}//${socketHost}/api/ws?gameId=${currentGameID}`;
-    
+
     console.log(`Attempting to connect to unified WebSocket at: ${socketURL}`);
-    
+
     const socket = new WebSocket(socketURL);
 
     socket.onopen = () => {
@@ -59,23 +61,23 @@ async function initializePage() {
                     // Only update if the FEN is different to avoid redundant redraws
                     if (chessgame.fen() !== messageData.payload.newFEN) {
                         console.log("Applying game state update from server.");
-                        
+
                         // Detect if this was a capture move by checking the move notation
                         const moveNotation = messageData.payload.move || '';
                         const isCapture = moveNotation.includes('x');
-                        
+
                         chessgame.load_fen(messageData.payload.newFEN);
-                        
+
                         if (messageData.payload.move) {
                             addMoveToHistory(messageData.payload.move, messageData.payload.player);
                         }
-                        
+
                         if (isCapture) {
                             play("capture");
                         } else {
                             play("move");
                         }
-                        
+
                         drawChessboard();
                         updateGameStatus();
                         checkGameEndConditions();
@@ -87,27 +89,40 @@ async function initializePage() {
                 const output = document.getElementById('chat-messages');
                 const messageDiv = document.createElement('div');
                 messageDiv.className = 'chat-message';
-                
+
                 const messageContent = document.createElement('div');
                 messageContent.className = 'message-content';
                 messageContent.textContent = messageData.payload;
-                
+
                 const timestamp = document.createElement('div');
                 timestamp.className = 'message-timestamp';
                 const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 timestamp.textContent = time;
-                
+
                 const sender = document.createElement('div');
                 sender.className = 'message-sender';
                 sender.textContent = messageData.sender || 'Opponent';
-                
+
                 messageDiv.appendChild(sender);
                 messageDiv.appendChild(messageContent);
                 messageDiv.appendChild(timestamp);
-                
+
                 output.appendChild(messageDiv);
                 output.scrollTop = output.scrollHeight;
 
+                break;
+            case 'timer_update':
+                if (timer && messageData.payload) {
+                    timer.handleTimerUpdate(messageData.payload);
+                }
+                break;
+            case 'time_forfeit':
+                if (messageData.payload) {
+                    const winner = messageData.payload.winner;
+                    const winnerDisplay = winner === 'white' ? 'White' : winner === 'black' ? 'Black' : 'Draw';
+                    showNotification(winnerDisplay);
+                    console.log(`Game ended by time forfeit. Winner: ${winnerDisplay}`);
+                }
                 break;
             default:
                 console.warn("Received unknown message type:", messageData.type, messageData);
@@ -126,7 +141,7 @@ async function initializePage() {
         console.error("WebSocket error:", error);
     };
 
-    window.sendMessage = function(event) {
+    window.sendMessage = function (event) {
         const messageInput = document.getElementById('chat-input');
         if (event.key === 'Enter' && !messageInput.disabled && messageInput.value.trim() !== '') {
 
@@ -136,58 +151,64 @@ async function initializePage() {
                 gameID: currentGameID
             };
             socket.send(JSON.stringify(chatPayload));
-            
+
             const output = document.getElementById('chat-messages');
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message own';
-            
+
             const messageContent = document.createElement('div');
             messageContent.className = 'message-content';
             messageContent.textContent = messageInput.value;
-            
+
             const timestamp = document.createElement('div');
             timestamp.className = 'message-timestamp';
             const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             timestamp.textContent = time;
-            
+
             const sender = document.createElement('div');
             sender.className = 'message-sender';
             sender.textContent = 'You';
-            
+
             messageDiv.appendChild(sender);
             messageDiv.appendChild(messageContent);
             messageDiv.appendChild(timestamp);
-            
+
             output.appendChild(messageDiv);
             output.scrollTop = output.scrollHeight;
-            
-            messageInput.value = ''; 
+
+            messageInput.value = '';
         }
     };
 
-    
+
     setupWasmAndListeners();
-    
+
     try {
         const gameResponse = await fetch(`${API_BASE_URL}/game/${currentGameID}`, { credentials: 'include' });
         if (!gameResponse.ok) {
             throw new Error(`Could not fetch game data: ${await gameResponse.text()}`);
         }
         const gameData = await gameResponse.json();
-        
-        myPlayerColor = gameData.playerColor; 
+
+        myPlayerColor = gameData.playerColor;
         chessgame.load_fen(gameData.fen);
         play("start")
-        
+
+        timer = new ChessTimer(currentGameID);
+        timer.setPlayerColor(myPlayerColor);
+        if (gameData.timer) {
+            timer.initFromGameData(gameData.timer);
+        }
+
         if (gameData.moveHistory) {
             moveHistory = gameData.moveHistory;
             updateGameHistoryDisplay();
         }
-        
+
         updateGameStatus();
         console.log(`Loaded game ${currentGameID}. Your color: ${myPlayerColor}.`);
         document.title = `Chess Game - ${currentGameID}`;
-        
+
         drawChessboard();
         hidePromotionDialog();
     } catch (error) {
@@ -202,7 +223,7 @@ function setupWasmAndListeners() {
 
     chessgame = new ChessGame();
     console.log("WASM module loaded.");
-    
+
     setPromotionGameAndConstants(chessgame, {
         WHITE, BLACK,
         W_QUEEN, W_ROOK, W_KNIGHT, W_BISHOP,
@@ -231,12 +252,12 @@ function getPieceColor(pieceValue) {
 function drawChessboard() {
     if (!chessgame) return;
     chessboardElement.innerHTML = "";
-    
+
     const containerHeight = chessboardElement.offsetHeight || 450;
     const chessboardWidth = containerHeight;
     const chessboardHeight = containerHeight;
     const squareSize = chessboardWidth / 8;
-    
+
     chessboardElement.style.width = `${chessboardWidth}px`;
     chessboardElement.style.height = `${chessboardHeight}px`;
     chessboardElement.style.display = "grid";
@@ -254,24 +275,24 @@ function drawChessboard() {
             const square = document.createElement("div");
             square.className = 'chess-square';
             const pieceValue = boardData[row * 8 + col];
-            
+
             square.style.width = `${squareSize}px`;
             square.style.height = `${squareSize}px`;
             square.style.position = 'absolute';
             square.style.left = `${visualCol * squareSize}px`;
             square.style.top = `${visualRow * squareSize}px`;
-            
+
             // checkerboard pattern
             const isLightSquare = (row + col) % 2 === 0;
             square.style.backgroundColor = isLightSquare ? '#f0d9b5' : '#b58863';
-            
+
             let cursorStyle = "default";
 
             // Handle selected piece
             if (selectedPiece && selectedPiece.row === row && selectedPiece.col === col) {
                 square.classList.add('selected');
             }
-            
+
             // Handle possible moves
             if (possibleMoves.some(move => move.row === row && move.col === col)) {
                 const isCapture = boardData[row * 8 + col] !== 0;
@@ -314,7 +335,7 @@ async function onSquareClick(event) {
     if (isProcessingMove || !currentGameID || !promotionDialog.classList.contains("hidden")) {
         return;
     }
-    
+
     // Client-side turn enforcement
     const currentTurnColor = chessgame.get_current_turn() === WHITE ? 'white' : 'black';
     if (myPlayerColor !== currentTurnColor) {
@@ -334,27 +355,27 @@ async function onSquareClick(event) {
             const movingPiece = { startRow, startCol, endRow: row, endCol: col };
             selectedPiece = null;
             possibleMoves = [];
-            
+
             try {
                 const targetPiece = chessgame.get_piece(movingPiece.endRow, movingPiece.endCol);
                 const isCapture = targetPiece !== 0;
-                
+
                 const isPromotion = await chessgame.make_move(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
-                
+
                 if (isCapture) {
                     play("capture");
                 } else {
                     play("move");
                 }
-                
+
                 // animation, does this even work???? maybe not working due to the chessboard being 
                 // rendered everytime we receive/send something to the websocket?
                 const squares = chessboardElement.querySelectorAll('.chess-square');
-                const targetSquare = Array.from(squares).find(sq => 
-                    parseInt(sq.dataset.row) === movingPiece.endRow && 
+                const targetSquare = Array.from(squares).find(sq =>
+                    parseInt(sq.dataset.row) === movingPiece.endRow &&
                     parseInt(sq.dataset.col) === movingPiece.endCol
                 );
-                
+
                 if (targetSquare) {
                     const piece = targetSquare.querySelector('.chess-piece');
                     if (piece) {
@@ -362,7 +383,7 @@ async function onSquareClick(event) {
                         setTimeout(() => piece.classList.remove('piece-moving'), 300);
                     }
                 }
-                
+
                 drawChessboard();
                 if (isPromotion) {
                     showPromotionDialog(movingPiece.startRow, movingPiece.startCol, movingPiece.endRow, movingPiece.endCol);
@@ -391,7 +412,7 @@ async function onSquareClick(event) {
 
 async function syncMoveWithServer(startRow, startCol, endRow, endCol, promotionChar = '') {
     const moveStr = coordsToAlgebraic(startRow, startCol, endRow, endCol) + promotionChar;
-    
+
     try {
         const response = await fetch(`${API_BASE_URL}/game/${currentGameID}/move`, {
             method: 'POST',
@@ -467,32 +488,32 @@ function convertToAlgebraicNotation(moveStr, player) {
         1: 'P', 2: 'N', 3: 'B', 4: 'R', 5: 'Q', 6: 'K', // White pieces
         9: 'p', 10: 'n', 11: 'b', 12: 'r', 13: 'q', 14: 'k' // Black pieces
     };
-    
+
     if (moveStr.length < 4) return moveStr;
-    
+
     const startCol = files.indexOf(moveStr[0]);
     const startRow = 8 - parseInt(moveStr[1]);
     const endCol = files.indexOf(moveStr[2]);
     const endRow = 8 - parseInt(moveStr[3]);
-    
+
     const startPiece = chessgame.get_piece(startRow, startCol);
     const endPiece = chessgame.get_piece(endRow, endCol);
     const pieceSymbol = pieces[startPiece] || '';
-    
+
     let notation = pieceSymbol;
     if (pieceSymbol === 'P' || pieceSymbol === 'p') {
-        notation = ''; 
+        notation = '';
     }
-    
+
     if (endPiece !== 0) {
         if (notation === '') {
             notation = moveStr[0];
         }
         notation += 'x';
     }
-    
+
     notation += moveStr[2] + moveStr[3];
-    
+
     if (chessgame.check()) {
         if (chessgame.checkmate()) {
             notation += '#';
@@ -500,7 +521,7 @@ function convertToAlgebraicNotation(moveStr, player) {
             notation += '+';
         }
     }
-    
+
     return notation;
 }
 
@@ -513,27 +534,27 @@ function addMoveToHistory(moveStr, player) {
         timestamp: new Date(),
         moveNumber: moveNumber
     };
-    
+
     moveHistory.push(moveEntry);
-    
+
     if (player === 'black') {
         moveNumber++;
     }
-    
+
     updateGameHistoryDisplay();
 }
 // TODO: this whole function should be moved to server.
 function updateGameHistoryDisplay() {
     const historyElement = document.getElementById('game-history');
     if (!historyElement) return;
-    
+
     const existingMoves = historyElement.querySelectorAll('.move-entry');
     existingMoves.forEach(move => move.remove());
-    
+
     moveHistory.forEach((moveEntry, index) => {
         const moveDiv = document.createElement('div');
         moveDiv.className = 'move-entry';
-        
+
         // Add move number for white moves
         if (moveEntry.player === 'white') {
             const moveNumberSpan = document.createElement('span');
@@ -541,21 +562,21 @@ function updateGameHistoryDisplay() {
             moveNumberSpan.textContent = `${moveEntry.moveNumber}. `;
             moveDiv.appendChild(moveNumberSpan);
         }
-        
+
         // Add notation
         const notationSpan = document.createElement('span');
         notationSpan.className = 'move-notation';
         notationSpan.textContent = moveEntry.notation;
         moveDiv.appendChild(notationSpan);
-        
+
         // Highlight current move
         if (index === moveHistory.length - 1) {
             moveDiv.classList.add('current');
         }
-        
+
         historyElement.appendChild(moveDiv);
     });
-    
+
     historyElement.scrollTop = historyElement.scrollHeight;
 }
 
@@ -563,17 +584,17 @@ function updateGameStatus() {
     const currentTurnElement = document.getElementById('current-turn');
     const playerColorElement = document.getElementById('player-color');
     const gameIdElement = document.getElementById('game-id');
-    
+
     if (currentTurnElement && chessgame) {
         const currentTurnColor = chessgame.get_current_turn() === WHITE ? 'White' : 'Black';
         currentTurnElement.textContent = currentTurnColor;
     }
-    
+
     if (playerColorElement && myPlayerColor) {
         playerColorElement.textContent = myPlayerColor.charAt(0).toUpperCase() + myPlayerColor.slice(1);
         playerColorElement.className = `status-value ${myPlayerColor}`;
     }
-    
+
     if (gameIdElement && currentGameID) {
         gameIdElement.textContent = currentGameID;
     }
